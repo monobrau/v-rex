@@ -1,0 +1,102 @@
+# Example Velociraptor Client Configuration Template
+# This file shows the structure of the auto-generated configuration
+# Customize as needed for your environment
+
+Client:
+  # Velociraptor server URLs (can specify multiple for failover)
+  server_urls:
+    - https://velociraptor-server.domain.local:8000
+    - https://velociraptor-backup.domain.local:8000
+
+  # Output directory for collected artifacts
+  # %COMPUTERNAME% will be replaced with actual computer name
+  output_directory: \\fileserver\VelociraptorEvidence\%COMPUTERNAME%
+
+  # Local buffer configuration
+  local_buffer:
+    memory_size: 50000000      # 50MB memory buffer
+    disk_size: 1000000000      # 1GB disk buffer
+    filename_linux: /var/tmp/Velociraptor_Buffer.bin
+    filename_windows: C:\Windows\Temp\Velociraptor_Buffer.bin
+    filename_darwin: /tmp/Velociraptor_Buffer.bin
+
+  # Writeback file stores client state
+  writeback_darwin: /etc/velociraptor.writeback.yaml
+  writeback_linux: /etc/velociraptor.writeback.yaml
+  writeback_windows: C:\ProgramData\Velociraptor\velociraptor.writeback.yaml
+
+  # Maximum upload size (10MB default)
+  max_upload_size: 10485760
+
+  # Windows installer configuration
+  windows_installer:
+    service_name: Velociraptor
+    install_path: C:\Program Files\Velociraptor
+    service_description: Velociraptor digital forensics and incident response agent
+
+  # CPU and memory limits (optional)
+  # Uncomment to limit resource usage
+  # max_poll: 60              # Maximum poll frequency in seconds
+  # max_poll_std: 30          # Standard deviation
+
+  # Crypto configuration (optional)
+  # use_self_signed_ssl: true
+
+  # Network configuration
+  # max_upload_rate: 1000000  # Bytes per second (1MB/s)
+
+# Logging configuration
+Logging:
+  output_directory: \\fileserver\VelociraptorEvidence\%COMPUTERNAME%\Logs
+  separate_logs_per_component: true
+
+  # Log retention (in days)
+  max_age_days: 30
+
+  # Logging levels: DEBUG, INFO, WARN, ERROR
+  debug: INFO
+
+# Auto-execution configuration
+# Specify artifacts to collect automatically on startup
+autoexec:
+  argv:
+    - artifacts
+    - collect
+    - "-v"                    # Verbose output
+    - Windows.KapeFiles.Targets  # Collect KAPE targets
+
+  # Additional artifact examples (uncomment to enable):
+  # - Windows.System.ProcessInfo
+  # - Windows.Network.NetstatEnriched
+  # - Windows.EventLogs.RDPAuth
+  # - Windows.Detection.Autoruns
+
+# Advanced Features (Optional)
+
+# Monitoring configuration
+# monitoring_artifacts:
+#   - Windows.Events.ProcessCreation
+#   - Windows.Events.DNSQueries
+
+# Custom artifact paths
+# artifact_definitions_dirs:
+#   - C:\ProgramData\Velociraptor\Artifacts
+
+# Bandwidth throttling
+# expected_clients: 1000
+# connection_timeout: 600
+
+# Version information
+version:
+  name: velociraptor
+  version: 0.6.8
+  commit_id: unknown
+  build_time: unknown
+
+# Notes:
+# 1. Server URLs should point to your Velociraptor server frontend
+# 2. Network share path must be accessible by SYSTEM account
+# 3. Ensure firewall allows outbound connections to server
+# 4. Configure artifacts based on your collection requirements
+# 5. Monitor disk space on network share
+# 6. Consider bandwidth implications for large deployments

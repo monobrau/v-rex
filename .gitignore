@@ -1,0 +1,31 @@
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Velociraptor files
+*.msi
+*.exe
+velociraptor-*
+
+# Configuration files with secrets
+*config.yaml
+!example-config.yaml
+
+# Windows files
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*~
+
+# Evidence data
+Evidence/
+Deployment/
+Logs/
+
+# PowerShell temp files
+*.ps1.bak
