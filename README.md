@@ -177,8 +177,15 @@ The tool presents a GUI with the following fields:
 #### 2. Velociraptor MSI
 - **Description**: Path to Velociraptor MSI installer
 - **Format**: Local or UNC path
-- **Example**: `\\server\software\velociraptor-v0.6.8-windows-amd64.msi`
+- **Example**: `\\server\software\velociraptor-client.msi`
 - **Action**: Click "Browse..." to select the file
+
+**⚠️ CRITICAL:** The MSI **MUST** be generated using `Manage-VelociraptorServer.ps1`. Do NOT use:
+- Generic Velociraptor MSIs from velociraptor.app
+- MSIs from other sources
+- Manually created MSI packages
+
+The server-generated MSI contains embedded client configuration and SSL certificates required for authentication. Using any other MSI will result in connection failures.
 
 #### 3. Server URL
 - **Description**: Velociraptor server URL

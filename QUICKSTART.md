@@ -13,7 +13,48 @@ This guide will get you up and running with Velociraptor deployment in 15 minute
 
 ## Step-by-Step Deployment
 
-### 1. Prepare Your Environment (5 minutes)
+### 1. Install Velociraptor Server (10 minutes)
+
+**⚠️ CRITICAL FIRST STEP:** You MUST install the Velociraptor server and generate a client MSI before deploying via GPO.
+
+#### Download Velociraptor
+
+```powershell
+# Download from: https://github.com/Velocidex/velociraptor/releases
+# Get the Windows executable (e.g., velociraptor-v0.6.8-windows-amd64.exe)
+```
+
+#### Install Server
+
+```powershell
+# Navigate to v-rex tools
+cd C:\Scripts\v-rex
+
+# Run server installation
+.\Install-VelociraptorServer.ps1
+
+# Fill in the GUI:
+# - Installation Path: C:\Program Files\Velociraptor Server
+# - Hostname: velociraptor-server.domain.local
+# - Frontend Port: 8000
+# - GUI Port: 8889
+# - Admin credentials
+```
+
+#### Generate Client MSI
+
+```powershell
+# Run server management tool
+.\Manage-VelociraptorServer.ps1
+
+# In the GUI:
+# 1. Go to "Client Package Generation" section
+# 2. Set output path (e.g., C:\Packages)
+# 3. Click "Create Client MSI"
+# 4. MSI will be created at: C:\Packages\velociraptor-client.msi
+```
+
+### 2. Prepare Environment (5 minutes)
 
 #### Install RSAT Tools
 
@@ -25,13 +66,6 @@ Install-WindowsFeature -Name GPMC
 Add-WindowsCapability -Online -Name Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0
 ```
 
-#### Download Velociraptor
-
-```powershell
-# Download from: https://github.com/Velocidex/velociraptor/releases
-# Get the Windows MSI installer (e.g., velociraptor-v0.6.8-windows-amd64.msi)
-```
-
 #### Create Network Share
 
 ```powershell
@@ -40,7 +74,7 @@ New-Item -Path "C:\VelociraptorEvidence" -ItemType Directory
 New-SmbShare -Name "VelociraptorEvidence" -Path "C:\VelociraptorEvidence" -FullAccess "Administrators" -ReadAccess "Domain Computers"
 ```
 
-### 2. Run the Deployment Tool (5 minutes)
+### 3. Deploy via GPO (5 minutes)
 
 #### Launch PowerShell as Administrator
 
@@ -62,15 +96,20 @@ Fill in the following fields:
 | Field | Example Value |
 |-------|---------------|
 | **GPO Name** | `Deploy-Velociraptor-Forensics` |
-| **Velociraptor MSI** | `C:\Downloads\velociraptor-v0.6.8-windows-amd64.msi` |
+| **Velociraptor MSI** | `C:\Packages\velociraptor-client.msi` ⚠️ |
 | **Server URL** | `https://velociraptor-server.domain.local:8000` |
 | **Network Share** | `\\fileserver\VelociraptorEvidence` |
 | **Target OU** | `OU=Workstations,DC=domain,DC=local` |
 | **Deployment Method** | `Startup Script` |
 
+**⚠️ CRITICAL:** Use the MSI generated in Step 1 (`velociraptor-client.msi` from Manage-VelociraptorServer.ps1).
+- Do NOT use generic Velociraptor MSIs from the internet
+- The server-generated MSI contains SSL certificates required for client-server communication
+- Using the wrong MSI will cause silent connection failures
+
 #### Click "Create GPO"
 
-Watch the output log for success messages.
+Watch the output log for success messages and validation warnings.
 
 ### 3. Test the Deployment (5 minutes)
 
