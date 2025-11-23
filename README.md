@@ -1,26 +1,59 @@
 # V-Rex: Velociraptor GPO Deployment Tool
 
-A Windows PowerShell GUI tool for deploying Velociraptor digital forensics and incident response agents via Group Policy Objects (GPO) on Windows Server environments.
+A complete Windows PowerShell GUI solution for deploying and managing Velociraptor digital forensics and incident response infrastructure via Group Policy Objects (GPO) on Windows Server environments.
 
 ## Overview
 
-V-Rex automates the creation and configuration of Group Policy Objects to deploy Velociraptor agents across your Windows domain. The tool handles:
+V-Rex provides end-to-end automation for Velociraptor deployment, from server installation to client deployment via Group Policy. The suite includes:
 
+- **Server Installation**: Automated Velociraptor server setup with GUI
+- **Server Management**: GUI-based server administration and monitoring
+- **GPO Deployment**: Automated client deployment via Group Policy
+- **Evidence Collection**: Centralized evidence storage on network shares
+- **Client Package Creation**: Automated MSI generation for deployment
+
+## Tools Included
+
+### 1. Install-VelociraptorServer.ps1
+GUI tool for installing and configuring a Velociraptor server including:
+- Interactive server configuration wizard
+- Automatic service installation
+- Firewall rule configuration
+- Initial admin user creation
+- SSL certificate setup
+
+### 2. Manage-VelociraptorServer.ps1
+Server management console providing:
+- Service control (start, stop, restart)
+- User management with role-based access
+- Client MSI package generation
+- Server status monitoring
+- Configuration editing
+
+### 3. Deploy-VelociraptorGPO.ps1
+GPO deployment tool for client rollout:
 - GPO creation and configuration
 - Velociraptor client configuration generation
 - Automated deployment script creation
 - Network share setup for evidence collection
-- OU linking for targeted deployment
+- OU targeting for controlled deployment
+
+### 4. Remove-VelociraptorGPO.ps1
+Cleanup and removal tool:
+- GPO unlinking and removal
+- Client uninstallation script generation
+- Safe removal procedures
 
 ## Features
 
-- **Graphical User Interface**: Easy-to-use Windows Forms GUI
-- **Automated GPO Creation**: Creates and configures GPOs with proper settings
+- **Complete Solution**: Server to client deployment in one package
+- **Graphical User Interface**: Easy-to-use Windows Forms GUIs for all tools
+- **Automated Setup**: Minimal manual configuration required
 - **Evidence Collection**: Automatically saves forensic evidence to network shares
 - **Flexible Deployment**: Supports startup script and software installation methods
 - **Comprehensive Logging**: Real-time output and persistent log files
 - **OU Targeting**: Link GPOs to specific Organizational Units
-- **Velociraptor Configuration**: Auto-generates client configuration files
+- **Role-Based Access**: Multiple user roles for server access control
 
 ## Prerequisites
 
@@ -53,17 +86,30 @@ Add-WindowsCapability -Online -Name Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0
 
 ### Velociraptor Requirements
 
-- Velociraptor MSI installer package
-- Velociraptor server already deployed and accessible
-- Server URL and port (default: 8000)
+- Velociraptor executable (download from GitHub releases)
+- Network connectivity for server-client communication
+
+## Quick Start
+
+### Complete Deployment Workflow
+
+1. **Install Velociraptor Server** (see [SERVER_SETUP.md](SERVER_SETUP.md))
+2. **Create Client MSI Package** using server management tool
+3. **Deploy via GPO** to domain computers
+4. **Monitor** client connections and evidence collection
 
 ## Installation
 
-1. Download the `Deploy-VelociraptorGPO.ps1` script to your Windows Server
-2. Ensure you have administrative privileges
-3. Verify RSAT tools are installed
+### 1. Download V-Rex Tools
+
+Clone or download all scripts to your Windows Server:
 
 ```powershell
+# If using git
+git clone https://github.com/yourrepo/v-rex.git
+cd v-rex
+
+# Or download and extract ZIP file
 # Verify GroupPolicy module is available
 Get-Module -ListAvailable GroupPolicy
 
@@ -73,7 +119,36 @@ Install-WindowsFeature -Name GPMC
 
 ## Usage
 
-### Running the Script
+### Step 1: Install Velociraptor Server
+
+Before deploying clients, you need a Velociraptor server. See [SERVER_SETUP.md](SERVER_SETUP.md) for detailed instructions.
+
+**Quick Server Installation:**
+
+```powershell
+# Download Velociraptor from GitHub releases first
+# https://github.com/Velocidex/velociraptor/releases
+
+# Run server installation tool
+.\Install-VelociraptorServer.ps1
+
+# Follow GUI prompts to:
+# - Set installation path
+# - Configure hostname and ports
+# - Set admin credentials
+# - Generate configuration
+```
+
+After installation, use the management console:
+
+```powershell
+.\Manage-VelociraptorServer.ps1
+
+# Create client MSI package for deployment
+# Manage users and server settings
+```
+
+### Step 2: Deploy Clients via GPO
 
 1. **Open PowerShell as Administrator**:
    ```powershell
@@ -85,7 +160,7 @@ Install-WindowsFeature -Name GPMC
    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
    ```
 
-3. **Run the Script**:
+3. **Run the Deployment Script**:
    ```powershell
    .\Deploy-VelociraptorGPO.ps1
    ```
