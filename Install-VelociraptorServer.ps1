@@ -388,17 +388,51 @@ function Install-VelociraptorService {
         # Use call operator with splatting for better path handling
         Push-Location $workingDir
         try {
+            # Capture both stdout and stderr
             $output = & $ExecutablePath $installArgs 2>&1
             $exitCode = $LASTEXITCODE
             
-            # Write output to files for consistency
-            $output | Out-File -FilePath $stdoutFile -Encoding UTF8
-            $output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | 
-                ForEach-Object { $_.ToString() } | Out-File -FilePath $stderrFile -Encoding UTF8
+            # Separate stdout and stderr
+            $stdoutLines = @()
+            $stderrLines = @()
+            
+            foreach ($line in $output) {
+                if ($line -is [System.Management.Automation.ErrorRecord]) {
+                    $stderrLines += $line.ToString()
+                }
+                else {
+                    $stdoutLines += $line.ToString()
+                }
+            }
+            
+            # Write to files
+            $stdoutContent = $stdoutLines -join "`r`n"
+            $stderrContent = $stderrLines -join "`r`n"
+            
+            $stdoutContent | Out-File -FilePath $stdoutFile -Encoding UTF8 -ErrorAction SilentlyContinue
+            $stderrContent | Out-File -FilePath $stderrFile -Encoding UTF8 -ErrorAction SilentlyContinue
+            
+            # Also capture all output for debugging
+            $allOutput = $output | ForEach-Object { 
+                if ($_ -is [System.Management.Automation.ErrorRecord]) { 
+                    $_.ToString() 
+                } else { 
+                    $_ 
+                } 
+            }
+            $allOutput | Out-File -FilePath "$env:TEMP\velo-service-install-all.txt" -Encoding UTF8 -ErrorAction SilentlyContinue
             
             # Read output files
-            $stdout = Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue
-            $stderr = Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue
+            $stdout = if ($stdoutContent) { $stdoutContent } else { $null }
+            $stderr = if ($stderrContent) { $stderrContent } else { $null }
+            
+            # If no stderr but we have output, check if any line looks like an error
+            if (!$stderr -and $allOutput) {
+                $errorLines = $allOutput | Where-Object { $_ -match 'error|Error|ERROR|failed|Failed|FAILED' }
+                if ($errorLines) {
+                    $stderr = $errorLines -join "`r`n"
+                }
+            }
             
             # Create a process-like object for compatibility
             $process = [PSCustomObject]@{
@@ -406,6 +440,12 @@ function Install-VelociraptorService {
             }
             
             Write-Log "Service install exit code: $exitCode" -Level Info
+            Write-Log "Total output lines captured: $($output.Count)" -Level Info
+            
+            # Log all output for debugging
+            if ($allOutput) {
+                Write-Log "All output: $($allOutput -join ' | ')" -Level Info
+            }
         
             if ($stdout) {
                 Write-Log "Service install stdout: $stdout" -Level Info
@@ -419,6 +459,10 @@ function Install-VelociraptorService {
             }
             else {
                 Write-Log "No stderr captured" -Level Warning
+                # If exit code is non-zero but no stderr, log the full output
+                if ($exitCode -ne 0 -and $allOutput) {
+                    Write-Log "Full output (no stderr but exit code $exitCode): $($allOutput -join '`r`n')" -Level Error
+                }
             }
 
             if ($process.ExitCode -eq 0) {
