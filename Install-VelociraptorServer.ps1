@@ -705,55 +705,16 @@ function Install-VelociraptorServer {
             throw "Failed to install Windows service"
         }
 
-        # Create admin user if specified
+        # Note: Admin user creation is optional
+        # Velociraptor does NOT automatically create users during service installation
+        # Users can be created via web GUI on first login, or manually via command line
+        # We'll skip automatic user creation to avoid installer freezing
+        # User can create admin user after installation via web GUI or command line
         if (![string]::IsNullOrWhiteSpace($AdminUsername)) {
-            # Service needs to be started first to create user
-            Write-Log "Starting service to initialize database..." -Level Info
-            $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
-            if ($service) {
-                try {
-                    # Check if service is already running
-                    if ($service.Status -ne 'Running') {
-                        Write-Log "Starting service..." -Level Info
-                        Start-Service -Name "Velociraptor" -ErrorAction Stop
-                        
-                        # Wait for service to be running with timeout
-                        $timeout = 30
-                        $elapsed = 0
-                        while ($service.Status -ne 'Running' -and $elapsed -lt $timeout) {
-                            Start-Sleep -Seconds 1
-                            $service.Refresh()
-                            $elapsed++
-                        }
-                        
-                        if ($service.Status -ne 'Running') {
-                            throw "Service did not start within $timeout seconds"
-                        }
-                    }
-                    else {
-                        Write-Log "Service is already running" -Level Info
-                    }
-                    
-                    # Give service a moment to fully initialize
-                    Write-Log "Waiting for service to initialize..." -Level Info
-                    Start-Sleep -Seconds 5
-
-                    Write-Log "Creating admin user..." -Level Info
-                    if (!(New-AdminUser -ExecutablePath $targetExe -ConfigPath $configPath `
-                            -Username $AdminUsername -Password $AdminPassword)) {
-                        Write-Log "Failed to create admin user, you can create one later manually" -Level Warning
-                    }
-
-                    # Don't stop service here - we'll start it again anyway
-                }
-                catch {
-                    Write-Log "Could not start service for user creation: $($_.Exception.Message)" -Level Warning
-                    Write-Log "You can create the admin user manually after the service is running" -Level Info
-                }
-            }
-            else {
-                Write-Log "Service not found - cannot create admin user. Service may need to be started first." -Level Warning
-            }
+            Write-Log "Admin user creation skipped during installation" -Level Info
+            Write-Log "You can create the admin user '$AdminUsername' after installation:" -Level Info
+            Write-Log "  1. Via web GUI: Navigate to https://${Hostname}:${GuiPort}/ and create user on first login" -Level Info
+            Write-Log "  2. Via command line: velociraptor.exe --config server.config.yaml user add $AdminUsername --role administrator" -Level Info
         }
 
         # Start the service
