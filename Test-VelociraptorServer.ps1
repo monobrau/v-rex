@@ -35,11 +35,11 @@ $ports = @(8000, 8889)
 foreach ($port in $ports) {
     $listening = netstat -ano | findstr ":$port" | findstr "LISTENING"
     if ($listening) {
-        Write-Host "   Port $port: LISTENING" -ForegroundColor Green
+        Write-Host "   Port ${port}: LISTENING" -ForegroundColor Green
         $listening | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
     }
     else {
-        Write-Host "   Port $port: NOT LISTENING" -ForegroundColor Red
+        Write-Host "   Port ${port}: NOT LISTENING" -ForegroundColor Red
     }
 }
 Write-Host ""
@@ -50,14 +50,14 @@ foreach ($port in $ports) {
     try {
         $test = Test-NetConnection -ComputerName localhost -Port $port -WarningAction SilentlyContinue
         if ($test.TcpTestSucceeded) {
-            Write-Host "   Port $port: Connection successful" -ForegroundColor Green
+            Write-Host "   Port ${port}: Connection successful" -ForegroundColor Green
         }
         else {
-            Write-Host "   Port $port: Connection failed" -ForegroundColor Red
+            Write-Host "   Port ${port}: Connection failed" -ForegroundColor Red
         }
     }
     catch {
-        Write-Host "   Port $port: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "   Port ${port}: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 Write-Host ""
@@ -158,33 +158,33 @@ Write-Host "=== Summary and Recommendations ===" -ForegroundColor Cyan
 Write-Host ""
 
 if ($service -and $service.Status -eq 'Running') {
-    Write-Host "✓ Service is running" -ForegroundColor Green
+    Write-Host "[OK] Service is running" -ForegroundColor Green
 }
 else {
-    Write-Host "✗ Service is NOT running" -ForegroundColor Red
-    Write-Host "  → Try: Start-Service -Name 'Velociraptor'" -ForegroundColor Yellow
+    Write-Host "[X] Service is NOT running" -ForegroundColor Red
+    Write-Host "  -> Try: Start-Service -Name 'Velociraptor'" -ForegroundColor Yellow
     Write-Host ""
 }
 
 $guiPort = 8889
 $listening = netstat -ano | findstr ":$guiPort" | findstr "LISTENING"
 if ($listening) {
-    Write-Host "✓ Port $guiPort is listening" -ForegroundColor Green
+    Write-Host "[OK] Port $guiPort is listening" -ForegroundColor Green
 }
 else {
-    Write-Host "✗ Port $guiPort is NOT listening" -ForegroundColor Red
-    Write-Host "  → Check service logs for errors" -ForegroundColor Yellow
-    Write-Host "  → Verify configuration file is correct" -ForegroundColor Yellow
+    Write-Host "[X] Port $guiPort is NOT listening" -ForegroundColor Red
+    Write-Host "  -> Check service logs for errors" -ForegroundColor Yellow
+    Write-Host "  -> Verify configuration file is correct" -ForegroundColor Yellow
     Write-Host ""
 }
 
 $firewallRules = Get-NetFirewallRule -DisplayName "Velociraptor GUI" -ErrorAction SilentlyContinue
 if ($firewallRules -and ($firewallRules | Where-Object { $_.Enabled -eq $true })) {
-    Write-Host "✓ Firewall rule exists and is enabled" -ForegroundColor Green
+    Write-Host "[OK] Firewall rule exists and is enabled" -ForegroundColor Green
 }
 else {
-    Write-Host "✗ Firewall rule missing or disabled" -ForegroundColor Red
-    Write-Host "  → Create rule: New-NetFirewallRule -DisplayName 'Velociraptor GUI' -Direction Inbound -Protocol TCP -LocalPort 8889 -Action Allow" -ForegroundColor Yellow
+    Write-Host "[X] Firewall rule missing or disabled" -ForegroundColor Red
+    Write-Host "  -> Create rule: New-NetFirewallRule -DisplayName 'Velociraptor GUI' -Direction Inbound -Protocol TCP -LocalPort 8889 -Action Allow" -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -195,6 +195,6 @@ Write-Host "  https://DC-05.dorks.lan:8889" -ForegroundColor White
 Write-Host ""
 Write-Host "If using HTTPS with self-signed certificate, you may need to:" -ForegroundColor Yellow
 Write-Host "  1. Accept the security warning in your browser" -ForegroundColor Yellow
-Write-Host "  2. Click 'Advanced' → 'Proceed to localhost (unsafe)'" -ForegroundColor Yellow
+Write-Host "  2. Click 'Advanced' then 'Proceed to localhost (unsafe)'" -ForegroundColor Yellow
 Write-Host ""
 
