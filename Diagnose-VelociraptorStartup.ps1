@@ -200,11 +200,11 @@ $ports = @(8000, 8889)
 foreach ($port in $ports) {
     $listening = netstat -ano | findstr ":$port" | findstr "LISTENING"
     if ($listening) {
-        Write-Host "   Port $port: LISTENING" -ForegroundColor Green
+        Write-Host "   Port ${port}: LISTENING" -ForegroundColor Green
         $listening | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
     }
     else {
-        Write-Host "   Port $port: NOT LISTENING" -ForegroundColor Red
+        Write-Host "   Port ${port}: NOT LISTENING" -ForegroundColor Red
     }
 }
 
