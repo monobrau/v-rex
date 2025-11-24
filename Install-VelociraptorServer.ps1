@@ -512,7 +512,18 @@ function New-AdminUser {
     try {
         Write-Log "Creating initial admin user..." -Level Info
 
-        # Use array for arguments - PowerShell will handle quoting automatically
+        # Verify paths exist and convert to absolute paths
+        if (!(Test-Path $ExecutablePath)) {
+            throw "Velociraptor executable not found at: $ExecutablePath"
+        }
+        $ExecutablePath = (Resolve-Path $ExecutablePath).Path
+
+        if (!(Test-Path $ConfigPath)) {
+            throw "Configuration file not found at: $ConfigPath"
+        }
+        $ConfigPath = (Resolve-Path $ConfigPath).Path
+
+        # Use array for arguments
         $userArgs = @(
             "--config"
             $ConfigPath
@@ -528,28 +539,51 @@ function New-AdminUser {
             $userArgs += $Password
         }
 
-        $process = Start-Process -FilePath $ExecutablePath `
-            -ArgumentList $userArgs `
-            -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput "$env:TEMP\velo-user-add.txt" `
-            -RedirectStandardError "$env:TEMP\velo-user-error.txt"
+        $stdoutFile = "$env:TEMP\velo-user-add.txt"
+        $stderrFile = "$env:TEMP\velo-user-error.txt"
+        $workingDir = Split-Path $ConfigPath -Parent
 
-        if ($process.ExitCode -eq 0) {
-            Write-Log "Admin user '$Username' created successfully" -Level Success
+        # Use call operator for better path handling
+        Push-Location $workingDir
+        try {
+            $output = & $ExecutablePath $userArgs 2>&1
+            $exitCode = $LASTEXITCODE
 
-            # Read and display any output
-            if (Test-Path "$env:TEMP\velo-user-add.txt") {
-                $output = Get-Content "$env:TEMP\velo-user-add.txt" -Raw
-                if ($output) {
-                    Write-Log "User creation output: $output" -Level Info
+            # Separate stdout and stderr
+            $stdoutLines = @()
+            $stderrLines = @()
+
+            foreach ($line in $output) {
+                if ($line -is [System.Management.Automation.ErrorRecord]) {
+                    $stderrLines += $line.ToString()
+                }
+                else {
+                    $stdoutLines += $line.ToString()
                 }
             }
 
-            return $true
+            $stdoutContent = $stdoutLines -join "`r`n"
+            $stderrContent = $stderrLines -join "`r`n"
+
+            $stdoutContent | Out-File -FilePath $stdoutFile -Encoding UTF8 -ErrorAction SilentlyContinue
+            $stderrContent | Out-File -FilePath $stderrFile -Encoding UTF8 -ErrorAction SilentlyContinue
+
+            if ($exitCode -eq 0) {
+                Write-Log "Admin user '$Username' created successfully" -Level Success
+
+                if ($stdoutContent) {
+                    Write-Log "User creation output: $stdoutContent" -Level Info
+                }
+
+                return $true
+            }
+            else {
+                $error = if ($stderrContent) { $stderrContent } else { "Exit code: $exitCode" }
+                throw "User creation failed: $error"
+            }
         }
-        else {
-            $error = Get-Content "$env:TEMP\velo-user-error.txt" -Raw -ErrorAction SilentlyContinue
-            throw "User creation failed: $error"
+        finally {
+            Pop-Location
         }
     }
     catch {
@@ -662,28 +696,65 @@ function Install-VelociraptorServer {
         if (![string]::IsNullOrWhiteSpace($AdminUsername)) {
             # Service needs to be started first to create user
             Write-Log "Starting service to initialize database..." -Level Info
-            Start-Service -Name "VelociraptorServer"
-            Start-Sleep -Seconds 5
+            $service = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+            if ($service) {
+                try {
+                    Start-Service -Name "VelociraptorServer" -ErrorAction Stop
+                    Start-Sleep -Seconds 5
 
-            if (!(New-AdminUser -ExecutablePath $targetExe -ConfigPath $configPath `
-                    -Username $AdminUsername -Password $AdminPassword)) {
-                Write-Log "Failed to create admin user, you can create one later manually" -Level Warning
+                    if (!(New-AdminUser -ExecutablePath $targetExe -ConfigPath $configPath `
+                            -Username $AdminUsername -Password $AdminPassword)) {
+                        Write-Log "Failed to create admin user, you can create one later manually" -Level Warning
+                    }
+
+                    Stop-Service -Name "VelociraptorServer" -Force -ErrorAction SilentlyContinue
+                }
+                catch {
+                    Write-Log "Could not start service for user creation: $($_.Exception.Message)" -Level Warning
+                    Write-Log "You can create the admin user manually after the service is running" -Level Info
+                }
             }
-
-            Stop-Service -Name "VelociraptorServer" -Force
+            else {
+                Write-Log "Service not found - cannot create admin user. Service may need to be started first." -Level Warning
+            }
         }
 
         # Start the service
         Write-Log "Starting Velociraptor Server service..." -Level Info
-        Start-Service -Name "VelociraptorServer"
-        Start-Sleep -Seconds 3
+        
+        # Try to find the service - it might have a different name
+        $service = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+        if (!$service) {
+            # Try to find any service with "velociraptor" in the name
+            $allServices = Get-Service | Where-Object { $_.Name -like "*velociraptor*" -or $_.DisplayName -like "*velociraptor*" }
+            if ($allServices) {
+                $service = $allServices[0]
+                Write-Log "Found service with name: $($service.Name)" -Level Info
+            }
+        }
+        
+        if ($service) {
+            try {
+                Start-Service -Name "VelociraptorServer" -ErrorAction Stop
+                Start-Sleep -Seconds 3
 
-        $service = Get-Service -Name "VelociraptorServer"
-        if ($service.Status -eq 'Running') {
-            Write-Log "Velociraptor Server started successfully!" -Level Success
+                $service = Get-Service -Name "VelociraptorServer"
+                if ($service.Status -eq 'Running') {
+                    Write-Log "Velociraptor Server started successfully!" -Level Success
+                }
+                else {
+                    Write-Log "Service exists but is not running. Status: $($service.Status)" -Level Warning
+                }
+            }
+            catch {
+                Write-Log "Failed to start service: $($_.Exception.Message)" -Level Error
+                Write-Log "You may need to start the service manually or check the service configuration" -Level Warning
+            }
         }
         else {
-            Write-Log "Service installed but not running. Check logs for errors." -Level Warning
+            Write-Log "Service 'VelociraptorServer' not found. Installation may have failed." -Level Error
+            Write-Log "Check the service installation logs above for errors." -Level Warning
+            Write-Log "You can try installing the service manually with: velociraptor.exe --config server.config.yaml service install" -Level Info
         }
 
         Write-Log "=== Installation Complete ===" -Level Success
