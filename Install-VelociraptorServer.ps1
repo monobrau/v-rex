@@ -712,15 +712,39 @@ function Install-VelociraptorServer {
             $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
             if ($service) {
                 try {
-                    Start-Service -Name "Velociraptor" -ErrorAction Stop
+                    # Check if service is already running
+                    if ($service.Status -ne 'Running') {
+                        Write-Log "Starting service..." -Level Info
+                        Start-Service -Name "Velociraptor" -ErrorAction Stop
+                        
+                        # Wait for service to be running with timeout
+                        $timeout = 30
+                        $elapsed = 0
+                        while ($service.Status -ne 'Running' -and $elapsed -lt $timeout) {
+                            Start-Sleep -Seconds 1
+                            $service.Refresh()
+                            $elapsed++
+                        }
+                        
+                        if ($service.Status -ne 'Running') {
+                            throw "Service did not start within $timeout seconds"
+                        }
+                    }
+                    else {
+                        Write-Log "Service is already running" -Level Info
+                    }
+                    
+                    # Give service a moment to fully initialize
+                    Write-Log "Waiting for service to initialize..." -Level Info
                     Start-Sleep -Seconds 5
 
+                    Write-Log "Creating admin user..." -Level Info
                     if (!(New-AdminUser -ExecutablePath $targetExe -ConfigPath $configPath `
                             -Username $AdminUsername -Password $AdminPassword)) {
                         Write-Log "Failed to create admin user, you can create one later manually" -Level Warning
                     }
 
-                    Stop-Service -Name "Velociraptor" -Force -ErrorAction SilentlyContinue
+                    # Don't stop service here - we'll start it again anyway
                 }
                 catch {
                     Write-Log "Could not start service for user creation: $($_.Exception.Message)" -Level Warning
@@ -748,15 +772,35 @@ function Install-VelociraptorServer {
         
         if ($service) {
             try {
-                Start-Service -Name "Velociraptor" -ErrorAction Stop
-                Start-Sleep -Seconds 3
-
-                $service = Get-Service -Name "Velociraptor"
+                # Check if already running
                 if ($service.Status -eq 'Running') {
-                    Write-Log "Velociraptor Server started successfully!" -Level Success
+                    Write-Log "Service is already running" -Level Info
                 }
                 else {
-                    Write-Log "Service exists but is not running. Status: $($service.Status)" -Level Warning
+                    Write-Log "Starting service (this may take a moment)..." -Level Info
+                    Start-Service -Name "Velociraptor" -ErrorAction Stop
+                    
+                    # Wait for service to start with timeout
+                    $timeout = 30
+                    $elapsed = 0
+                    $service.Refresh()
+                    while ($service.Status -ne 'Running' -and $elapsed -lt $timeout) {
+                        Start-Sleep -Seconds 1
+                        $service.Refresh()
+                        $elapsed++
+                        if ($elapsed % 5 -eq 0) {
+                            Write-Log "Waiting for service to start... ($elapsed/$timeout seconds)" -Level Info
+                        }
+                    }
+
+                    $service.Refresh()
+                    if ($service.Status -eq 'Running') {
+                        Write-Log "Velociraptor Server started successfully!" -Level Success
+                    }
+                    else {
+                        Write-Log "Service exists but is not running. Status: $($service.Status)" -Level Warning
+                        Write-Log "Service may still be starting. Check service status manually." -Level Info
+                    }
                 }
             }
             catch {
