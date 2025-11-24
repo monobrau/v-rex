@@ -200,30 +200,39 @@ Write-Host "Step 5: Updating windows_installer path in config..." -ForegroundCol
 $configLines = Get-Content $configPath
 $configUpdated = $false
 $inWindowsInstaller = $false
+$foundWindowsInstaller = $false
 
 for ($i = 0; $i -lt $configLines.Count; $i++) {
     $line = $configLines[$i]
     
-    if ($line -match '^windows_installer:') {
+    if ($line -match '^\s*windows_installer:') {
         $inWindowsInstaller = $true
+        $foundWindowsInstaller = $true
+        Write-Host "   Found windows_installer section at line $($i+1)" -ForegroundColor Gray
     }
-    elseif ($inWindowsInstaller -and $line -match '^[A-Z]') {
+    elseif ($inWindowsInstaller -and $line -match '^[A-Z]' -and $line -notmatch '^\s') {
         $inWindowsInstaller = $false
     }
     
     if ($inWindowsInstaller -and $line -match '^\s+install_path:\s*(.+)$') {
         $currentPath = $matches[1].Trim()
+        Write-Host "   Found install_path: $currentPath" -ForegroundColor Gray
         if ($currentPath -notlike "*Velociraptor Server*") {
             Write-Host "   Updating install_path from client to server path..." -ForegroundColor Yellow
             $indent = if ($line -match '^(\s+)install_path:') { $matches[1] } else { "    " }
             $serverInstallPath = '$ProgramFiles\Velociraptor Server\velociraptor.exe'
             $configLines[$i] = "${indent}install_path: $serverInstallPath"
             $configUpdated = $true
+            Write-Host "   Updated to: $serverInstallPath" -ForegroundColor Green
         }
         else {
             Write-Host "   install_path is already correct" -ForegroundColor Gray
         }
     }
+}
+
+if (-not $foundWindowsInstaller) {
+    Write-Host "   Note: windows_installer section not found in config (may not be present)" -ForegroundColor Yellow
 }
 
 if ($configUpdated) {
@@ -235,8 +244,12 @@ if ($configUpdated) {
         Write-Host "   Config updated successfully" -ForegroundColor Green
     }
     catch {
-        Write-Host "   WARNING: Could not update config: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "   ERROR: Could not update config: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
     }
+}
+else {
+    Write-Host "   No changes needed to windows_installer section" -ForegroundColor Gray
 }
 
 # Step 6: Install service with correct path using sc.exe directly
@@ -245,38 +258,67 @@ Write-Host "Step 6: Installing service with correct server executable..." -Foreg
 
 # Use sc.exe directly to ensure correct path, bypassing config's windows_installer settings
 $serviceName = "Velociraptor"
+# sc.exe requires the binPath to be in quotes if it contains spaces, and arguments need to be part of the path
 $binPath = "`"$serverExe`" --config `"$configPath`" service run"
 
 try {
     Write-Host "   Creating service with sc.exe..." -ForegroundColor Gray
-    $createResult = sc.exe create $serviceName binPath= $binPath start= auto DisplayName= "Velociraptor" 2>&1
     
-    if ($LASTEXITCODE -eq 0) {
+    # Try using sc.exe directly - construct the command carefully
+    # sc.exe create ServiceName binPath= "full path with args" start= auto DisplayName= "Name"
+    # Note: binPath must be quoted if it contains spaces, and the entire executable+args goes in one quoted string
+    
+    # Build the command as a single string to avoid PowerShell argument parsing issues
+    $createCmd = "sc.exe create `"$serviceName`" binPath= `"$binPath`" start= auto DisplayName= `"Velociraptor`""
+    Write-Host "   Running: $createCmd" -ForegroundColor Gray
+    
+    # Use Invoke-Expression to run the command as-is
+    $createResult = Invoke-Expression $createCmd 2>&1
+    $createExitCode = $LASTEXITCODE
+    
+    if ($createExitCode -eq 0) {
         Write-Host "   Service created successfully" -ForegroundColor Green
         
         # Set service description
-        sc.exe description $serviceName "Velociraptor Server" | Out-Null
+        $descResult = & sc.exe description $serviceName "Velociraptor Server" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "   Service description set" -ForegroundColor Gray
+        }
         
         # Configure failure actions
-        sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+        $failureResult = & sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "   Failure actions configured" -ForegroundColor Gray
+        }
     }
     else {
-        Write-Host "   ERROR: Service creation failed" -ForegroundColor Red
-        Write-Host "   Output: $createResult" -ForegroundColor Gray
+        Write-Host "   ERROR: Service creation failed with exit code $createExitCode" -ForegroundColor Red
+        Write-Host "   Output:" -ForegroundColor Yellow
+        $createResult | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
         
-        # Try Velociraptor's service install as fallback
+        # Try Velociraptor's service install as fallback (config should already be updated in Step 5)
         Write-Host "   Trying Velociraptor's service install as fallback..." -ForegroundColor Yellow
+        Write-Host "   (Config should already be updated with correct install_path)" -ForegroundColor Gray
         Push-Location $ServerPath
         try {
             $installArgs = @("--config", $ConfigFile, "service", "install")
+            Write-Host "   Running: .\velociraptor.exe $($installArgs -join ' ')" -ForegroundColor Gray
             $output = & $serverExe $installArgs 2>&1
             $exitCode = $LASTEXITCODE
             
             if ($exitCode -ne 0) {
                 Write-Host "   ERROR: Fallback installation also failed" -ForegroundColor Red
-                Write-Host "   Output: $output" -ForegroundColor Gray
+                Write-Host "   Output:" -ForegroundColor Yellow
+                $output | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
                 Pop-Location
                 exit 1
+            }
+            else {
+                Write-Host "   Service installed via Velociraptor command" -ForegroundColor Green
+                if ($output) {
+                    Write-Host "   Installation output:" -ForegroundColor Gray
+                    $output | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
+                }
             }
         }
         finally {
@@ -286,6 +328,7 @@ try {
 }
 catch {
     Write-Host "   ERROR: Failed to install service: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   Exception details: $($_.Exception)" -ForegroundColor Gray
     exit 1
 }
 
