@@ -196,6 +196,26 @@ if ($process) {
     Write-Host "   Process path: $($process.Path)" -ForegroundColor Gray
     Write-Host "   CPU time: $($process.CPU)" -ForegroundColor Gray
     Write-Host "   Memory: $([math]::Round($process.WorkingSet64 / 1MB, 2)) MB" -ForegroundColor Gray
+    
+    # Check if process path matches expected server installation
+    $expectedServerPath = "C:\Program Files\Velociraptor Server\velociraptor.exe"
+    $processDir = Split-Path $process.Path -Parent
+    
+    if ($process.Path -notlike "*Velociraptor Server*") {
+        Write-Host "" -ForegroundColor Red
+        Write-Host "   *** CRITICAL ISSUE DETECTED ***" -ForegroundColor Red
+        Write-Host "   Process is running from: $processDir" -ForegroundColor Red
+        Write-Host "   Expected server path: C:\Program Files\Velociraptor Server\" -ForegroundColor Yellow
+        Write-Host "   This appears to be the CLIENT installation, not the SERVER!" -ForegroundColor Red
+        Write-Host "   The service is running the wrong executable." -ForegroundColor Red
+        Write-Host "" -ForegroundColor Yellow
+        Write-Host "   SOLUTION:" -ForegroundColor Yellow
+        Write-Host "   1. Stop the current service: Stop-Service -Name 'Velociraptor'" -ForegroundColor White
+        Write-Host "   2. Remove the client service: sc.exe delete Velociraptor" -ForegroundColor White
+        Write-Host "   3. Reinstall server service from: C:\Program Files\Velociraptor Server\" -ForegroundColor White
+        Write-Host "      cd 'C:\Program Files\Velociraptor Server'" -ForegroundColor Gray
+        Write-Host "      .\velociraptor.exe --config server.config.yaml service install" -ForegroundColor Gray
+    }
 }
 else {
     Write-Host "   WARNING: No velociraptor.exe process found!" -ForegroundColor Red
@@ -208,11 +228,19 @@ Write-Host ""
 Write-Host "=== Summary and Recommendations ===" -ForegroundColor Cyan
 Write-Host ""
 
+# Check service status (refresh to get current state)
+$service.Refresh()
 if ($service -and $service.Status -eq 'Running') {
     Write-Host "[OK] Service is running" -ForegroundColor Green
     
     if ($process) {
-        Write-Host "[OK] Velociraptor process is active" -ForegroundColor Green
+        $processDir = Split-Path $process.Path -Parent
+        if ($process.Path -like "*Velociraptor Server*") {
+            Write-Host "[OK] Velociraptor SERVER process is active" -ForegroundColor Green
+        }
+        else {
+            Write-Host "[X] Velociraptor CLIENT process is running (wrong installation!)" -ForegroundColor Red
+        }
     }
     else {
         Write-Host "[X] Velociraptor process NOT found - service may have crashed" -ForegroundColor Red
