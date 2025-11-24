@@ -4,9 +4,24 @@
 
 .DESCRIPTION
     Checks service status, ports, firewall, and logs to diagnose why web GUI is not accessible
+    
+.PARAMETER ServerName
+    Optional server name or IP address to test remote connections (defaults to localhost)
+    
+.EXAMPLE
+    .\Test-VelociraptorServer.ps1
+    
+.EXAMPLE
+    .\Test-VelociraptorServer.ps1 -ServerName "192.168.1.100"
 #>
 
+param(
+    [string]$ServerName = "localhost"
+)
+
 Write-Host "=== Velociraptor Server Diagnostic ===" -ForegroundColor Cyan
+Write-Host "Testing server: $ServerName" -ForegroundColor Gray
+Write-Host ""
 Write-Host ""
 
 # 1. Check service status
@@ -44,11 +59,11 @@ foreach ($port in $ports) {
 }
 Write-Host ""
 
-# 3. Test local connection
-Write-Host "3. Testing local connection to ports..." -ForegroundColor Yellow
+# 3. Test connection to ports
+Write-Host "3. Testing connection to ports on $ServerName..." -ForegroundColor Yellow
 foreach ($port in $ports) {
     try {
-        $test = Test-NetConnection -ComputerName localhost -Port $port -WarningAction SilentlyContinue
+        $test = Test-NetConnection -ComputerName $ServerName -Port $port -WarningAction SilentlyContinue
         if ($test.TcpTestSucceeded) {
             Write-Host "   Port ${port}: Connection successful" -ForegroundColor Green
         }
@@ -125,7 +140,7 @@ foreach ($path in $logPaths) {
     if (Test-Path $path) {
         $logFiles = Get-ChildItem -Path $path -Filter "*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5
         if ($logFiles) {
-            Write-Host "   Recent log files in $path:" -ForegroundColor Green
+            Write-Host "   Recent log files in ${path}:" -ForegroundColor Green
             $foundLogs = $true
             foreach ($logFile in $logFiles) {
                 Write-Host "     - $($logFile.Name) (Last modified: $($logFile.LastWriteTime))" -ForegroundColor Gray
@@ -245,7 +260,11 @@ else {
 Write-Host "Try accessing the web GUI at:" -ForegroundColor Cyan
 Write-Host "  https://localhost:8889" -ForegroundColor White
 Write-Host "  or" -ForegroundColor Gray
-Write-Host "  https://DC-05.dorks.lan:8889" -ForegroundColor White
+Write-Host "  https://<server-hostname-or-ip>:8889" -ForegroundColor White
+Write-Host ""
+Write-Host "To find your server hostname/IP:" -ForegroundColor Yellow
+Write-Host "  hostname" -ForegroundColor Gray
+Write-Host "  ipconfig" -ForegroundColor Gray
 Write-Host ""
 Write-Host "If using HTTPS with self-signed certificate, you may need to:" -ForegroundColor Yellow
 Write-Host "  1. Accept the security warning in your browser" -ForegroundColor Yellow
