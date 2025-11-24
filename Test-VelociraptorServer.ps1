@@ -70,8 +70,9 @@ if ($firewallRules) {
     $firewallRules | ForEach-Object {
         $rule = $_
         $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction SilentlyContinue
-        $action = Get-NetFirewallAction -AssociatedNetFirewallRule $rule -ErrorAction SilentlyContinue
-        Write-Host "     - $($rule.DisplayName): $($action.Action) on port $($portFilter.LocalPort)" -ForegroundColor $(if ($rule.Enabled) { 'Green' } else { 'Yellow' })
+        $action = $rule.Action
+        $port = if ($portFilter) { $portFilter.LocalPort } else { "unknown" }
+        Write-Host "     - $($rule.DisplayName): $action on port $port" -ForegroundColor $(if ($rule.Enabled) { 'Green' } else { 'Yellow' })
         if (!$rule.Enabled) {
             Write-Host "       WARNING: Rule is disabled!" -ForegroundColor Red
         }
@@ -116,25 +117,44 @@ Write-Host ""
 # 6. Check service logs
 Write-Host "6. Checking service logs..." -ForegroundColor Yellow
 $logPath = "C:\Program Files\Velociraptor Server\Logs"
-if (Test-Path $logPath) {
-    $logFiles = Get-ChildItem -Path $logPath -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 3
-    if ($logFiles) {
-        Write-Host "   Recent log files:" -ForegroundColor Green
-        foreach ($logFile in $logFiles) {
-            Write-Host "     - $($logFile.Name) (Last modified: $($logFile.LastWriteTime))" -ForegroundColor Gray
-            $errors = Get-Content $logFile.FullName -Tail 10 | Select-String -Pattern "error|Error|ERROR|failed|Failed|FAILED" -CaseSensitive:$false
-            if ($errors) {
-                Write-Host "       Recent errors found:" -ForegroundColor Red
-                $errors | ForEach-Object { Write-Host "         $_" -ForegroundColor Red }
+$logPathAlt = "C:\Program Files\Velociraptor Server"
+$logPaths = @($logPath, $logPathAlt)
+
+$foundLogs = $false
+foreach ($path in $logPaths) {
+    if (Test-Path $path) {
+        $logFiles = Get-ChildItem -Path $path -Filter "*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+        if ($logFiles) {
+            Write-Host "   Recent log files in $path:" -ForegroundColor Green
+            $foundLogs = $true
+            foreach ($logFile in $logFiles) {
+                Write-Host "     - $($logFile.Name) (Last modified: $($logFile.LastWriteTime))" -ForegroundColor Gray
+                $errors = Get-Content $logFile.FullName -Tail 10 -ErrorAction SilentlyContinue | Select-String -Pattern "error|Error|ERROR|failed|Failed|FAILED" -CaseSensitive:$false
+                if ($errors) {
+                    Write-Host "       Recent errors found:" -ForegroundColor Red
+                    $errors | ForEach-Object { Write-Host "         $_" -ForegroundColor Red }
+                }
             }
         }
     }
-    else {
-        Write-Host "   No log files found in $logPath" -ForegroundColor Yellow
-    }
 }
-else {
-    Write-Host "   Log directory not found: $logPath" -ForegroundColor Yellow
+
+if (!$foundLogs) {
+    Write-Host "   No log files found in expected locations" -ForegroundColor Yellow
+    Write-Host "   Checking service executable path..." -ForegroundColor Yellow
+    $service = Get-WmiObject Win32_Service -Filter "Name='Velociraptor'" -ErrorAction SilentlyContinue
+    if ($service) {
+        Write-Host "   Service executable: $($service.PathName)" -ForegroundColor Gray
+        $serviceDir = Split-Path $service.PathName -Parent
+        Write-Host "   Service directory: $serviceDir" -ForegroundColor Gray
+        if (Test-Path $serviceDir) {
+            $serviceLogs = Get-ChildItem -Path $serviceDir -Filter "*.log" -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 3
+            if ($serviceLogs) {
+                Write-Host "   Found logs in service directory:" -ForegroundColor Green
+                $serviceLogs | ForEach-Object { Write-Host "     - $($_.FullName)" -ForegroundColor Gray }
+            }
+        }
+    }
 }
 Write-Host ""
 
@@ -153,12 +173,38 @@ else {
 }
 Write-Host ""
 
-# 8. Summary and recommendations
+# 8. Check if process is actually running
+Write-Host "8. Checking if Velociraptor process is running..." -ForegroundColor Yellow
+$process = Get-Process -Name "velociraptor" -ErrorAction SilentlyContinue
+if ($process) {
+    Write-Host "   Process found: PID $($process.Id)" -ForegroundColor Green
+    Write-Host "   Process path: $($process.Path)" -ForegroundColor Gray
+    Write-Host "   CPU time: $($process.CPU)" -ForegroundColor Gray
+    Write-Host "   Memory: $([math]::Round($process.WorkingSet64 / 1MB, 2)) MB" -ForegroundColor Gray
+}
+else {
+    Write-Host "   WARNING: No velociraptor.exe process found!" -ForegroundColor Red
+    Write-Host "   Service shows as running but process is not active" -ForegroundColor Red
+    Write-Host "   This usually means the service crashed or failed to start" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# 9. Summary and recommendations
 Write-Host "=== Summary and Recommendations ===" -ForegroundColor Cyan
 Write-Host ""
 
 if ($service -and $service.Status -eq 'Running') {
     Write-Host "[OK] Service is running" -ForegroundColor Green
+    
+    if ($process) {
+        Write-Host "[OK] Velociraptor process is active" -ForegroundColor Green
+    }
+    else {
+        Write-Host "[X] Velociraptor process NOT found - service may have crashed" -ForegroundColor Red
+        Write-Host "  -> Check Windows Event Log: Get-EventLog -LogName Application -Source '*Velociraptor*' -Newest 10" -ForegroundColor Yellow
+        Write-Host "  -> Try restarting: Restart-Service -Name 'Velociraptor'" -ForegroundColor Yellow
+        Write-Host ""
+    }
 }
 else {
     Write-Host "[X] Service is NOT running" -ForegroundColor Red
@@ -173,8 +219,16 @@ if ($listening) {
 }
 else {
     Write-Host "[X] Port $guiPort is NOT listening" -ForegroundColor Red
-    Write-Host "  -> Check service logs for errors" -ForegroundColor Yellow
-    Write-Host "  -> Verify configuration file is correct" -ForegroundColor Yellow
+    if ($process) {
+        Write-Host "  -> Process is running but not binding to port - check configuration" -ForegroundColor Yellow
+        Write-Host "  -> Verify config: Get-Content 'C:\Program Files\Velociraptor Server\server.config.yaml' | Select-String -Pattern 'bind_port|GUI'" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "  -> Process is not running - service likely crashed on startup" -ForegroundColor Yellow
+        Write-Host "  -> Check service executable path and configuration" -ForegroundColor Yellow
+    }
+    Write-Host "  -> Check if port is in use: netstat -ano | findstr ':8889'" -ForegroundColor Yellow
+    Write-Host "  -> Try restarting: Restart-Service -Name 'Velociraptor'" -ForegroundColor Yellow
     Write-Host ""
 }
 
