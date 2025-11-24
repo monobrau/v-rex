@@ -26,7 +26,7 @@ $script:ExePath = "C:\Program Files\Velociraptor Server\velociraptor.exe"
 # Function to get service status
 function Get-ServerStatus {
     try {
-        $service = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+        $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
         if ($service) {
             return @{
                 Exists = $true
@@ -61,15 +61,15 @@ function Set-ServerService {
     try {
         switch ($Action) {
             'Start' {
-                Start-Service -Name "VelociraptorServer"
+                Start-Service -Name "Velociraptor"
                 return "Server started successfully"
             }
             'Stop' {
-                Stop-Service -Name "VelociraptorServer" -Force
+                Stop-Service -Name "Velociraptor" -Force
                 return "Server stopped successfully"
             }
             'Restart' {
-                Restart-Service -Name "VelociraptorServer" -Force
+                Restart-Service -Name "Velociraptor" -Force
                 return "Server restarted successfully"
             }
         }

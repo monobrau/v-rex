@@ -316,13 +316,13 @@ function Install-VelociraptorService {
         Write-Log "Installing Velociraptor as Windows service..." -Level Info
 
         # Check if service already exists
-        $existingService = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+        $existingService = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
 
         if ($existingService) {
             Write-Log "Service already exists. Stopping and removing..." -Level Warning
 
             if ($existingService.Status -eq 'Running') {
-                Stop-Service -Name "VelociraptorServer" -Force
+                Stop-Service -Name "Velociraptor" -Force
                 Start-Sleep -Seconds 2
             }
 
@@ -343,7 +343,7 @@ function Install-VelociraptorService {
             Start-Sleep -Seconds 2
             
             # Also try using sc.exe as fallback
-            $scRemove = sc.exe delete VelociraptorServer 2>&1
+            $scRemove = sc.exe delete Velociraptor 2>&1
             if ($scRemove) {
                 Write-Log "Service removal output: $scRemove" -Level Info
             }
@@ -469,8 +469,8 @@ function Install-VelociraptorService {
                 Write-Log "Service installed successfully" -Level Success
 
                 # Configure service for auto-start and recovery
-                sc.exe config VelociraptorServer start= auto
-                sc.exe failure VelociraptorServer reset= 86400 actions= restart/60000/restart/60000/restart/60000
+                sc.exe config Velociraptor start= auto
+                sc.exe failure Velociraptor reset= 86400 actions= restart/60000/restart/60000/restart/60000
 
                 Write-Log "Service configured for automatic startup" -Level Success
                 return $true
@@ -696,10 +696,10 @@ function Install-VelociraptorServer {
         if (![string]::IsNullOrWhiteSpace($AdminUsername)) {
             # Service needs to be started first to create user
             Write-Log "Starting service to initialize database..." -Level Info
-            $service = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+            $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
             if ($service) {
                 try {
-                    Start-Service -Name "VelociraptorServer" -ErrorAction Stop
+                    Start-Service -Name "Velociraptor" -ErrorAction Stop
                     Start-Sleep -Seconds 5
 
                     if (!(New-AdminUser -ExecutablePath $targetExe -ConfigPath $configPath `
@@ -707,7 +707,7 @@ function Install-VelociraptorServer {
                         Write-Log "Failed to create admin user, you can create one later manually" -Level Warning
                     }
 
-                    Stop-Service -Name "VelociraptorServer" -Force -ErrorAction SilentlyContinue
+                    Stop-Service -Name "Velociraptor" -Force -ErrorAction SilentlyContinue
                 }
                 catch {
                     Write-Log "Could not start service for user creation: $($_.Exception.Message)" -Level Warning
@@ -723,7 +723,7 @@ function Install-VelociraptorServer {
         Write-Log "Starting Velociraptor Server service..." -Level Info
         
         # Try to find the service - it might have a different name
-        $service = Get-Service -Name "VelociraptorServer" -ErrorAction SilentlyContinue
+        $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
         if (!$service) {
             # Try to find any service with "velociraptor" in the name
             $allServices = Get-Service | Where-Object { $_.Name -like "*velociraptor*" -or $_.DisplayName -like "*velociraptor*" }
@@ -735,10 +735,10 @@ function Install-VelociraptorServer {
         
         if ($service) {
             try {
-                Start-Service -Name "VelociraptorServer" -ErrorAction Stop
+                Start-Service -Name "Velociraptor" -ErrorAction Stop
                 Start-Sleep -Seconds 3
 
-                $service = Get-Service -Name "VelociraptorServer"
+                $service = Get-Service -Name "Velociraptor"
                 if ($service.Status -eq 'Running') {
                     Write-Log "Velociraptor Server started successfully!" -Level Success
                 }
@@ -752,7 +752,7 @@ function Install-VelociraptorServer {
             }
         }
         else {
-            Write-Log "Service 'VelociraptorServer' not found. Installation may have failed." -Level Error
+            Write-Log "Service 'Velociraptor' not found. Installation may have failed." -Level Error
             Write-Log "Check the service installation logs above for errors." -Level Warning
             Write-Log "You can try installing the service manually with: velociraptor.exe --config server.config.yaml service install" -Level Info
         }
