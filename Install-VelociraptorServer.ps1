@@ -323,22 +323,73 @@ function Install-VelociraptorService {
 
             if ($existingService.Status -eq 'Running') {
                 Stop-Service -Name "VelociraptorServer" -Force
+                Start-Sleep -Seconds 2
             }
 
-            & $ExecutablePath --config $ConfigPath service remove
+            # Remove service using velociraptor command
+            $removeArgs = @(
+                "--config", $ConfigPath,
+                "service", "remove"
+            )
+            
+            $removeProcess = Start-Process -FilePath $ExecutablePath `
+                -ArgumentList $removeArgs `
+                -Wait -PassThru -NoNewWindow `
+                -RedirectStandardOutput "$env:TEMP\velo-service-remove.txt" `
+                -RedirectStandardError "$env:TEMP\velo-service-remove-error.txt"
+            
+            Start-Sleep -Seconds 2
+            
+            # Also try using sc.exe as fallback
+            $scRemove = sc.exe delete VelociraptorServer 2>&1
+            if ($scRemove) {
+                Write-Log "Service removal output: $scRemove" -Level Info
+            }
+            
             Start-Sleep -Seconds 2
         }
 
+        # Verify paths exist and convert to absolute paths
+        if (!(Test-Path $ExecutablePath)) {
+            throw "Velociraptor executable not found at: $ExecutablePath"
+        }
+        $ExecutablePath = (Resolve-Path $ExecutablePath).Path
+
+        if (!(Test-Path $ConfigPath)) {
+            throw "Configuration file not found at: $ConfigPath"
+        }
+        $ConfigPath = (Resolve-Path $ConfigPath).Path
+
         # Install service
         Write-Log "Installing service..." -Level Info
+        Write-Log "Executable: $ExecutablePath" -Level Info
+        Write-Log "Config: $ConfigPath" -Level Info
+        
         $installArgs = @(
             "--config", $ConfigPath,
             "service", "install"
         )
 
+        $stdoutFile = "$env:TEMP\velo-service-install.txt"
+        $stderrFile = "$env:TEMP\velo-service-install-error.txt"
+
+        # Set working directory to config file location
+        $workingDir = Split-Path $ConfigPath -Parent
+        
         $process = Start-Process -FilePath $ExecutablePath `
             -ArgumentList $installArgs `
-            -Wait -PassThru -NoNewWindow
+            -WorkingDirectory $workingDir `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $stdoutFile `
+            -RedirectStandardError $stderrFile
+
+        # Read output files
+        $stdout = Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue
+        $stderr = Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue
+
+        if ($stdout) {
+            Write-Log "Service install output: $stdout" -Level Info
+        }
 
         if ($process.ExitCode -eq 0) {
             Write-Log "Service installed successfully" -Level Success
@@ -351,7 +402,14 @@ function Install-VelociraptorService {
             return $true
         }
         else {
-            throw "Service installation failed with exit code $($process.ExitCode)"
+            $errorMsg = "Service installation failed with exit code $($process.ExitCode)"
+            if ($stderr) {
+                $errorMsg += "`nError output: $stderr"
+            }
+            if ($stdout) {
+                $errorMsg += "`nStandard output: $stdout"
+            }
+            throw $errorMsg
         }
     }
     catch {
