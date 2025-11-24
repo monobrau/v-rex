@@ -44,7 +44,7 @@ function Write-Log {
             'Error' { [System.Drawing.Color]::Red }
             'Warning' { [System.Drawing.Color]::Orange }
             'Success' { [System.Drawing.Color]::Green }
-            default { [System.Drawing.Color]::Black }
+            default { $script:outputTextBox.ForeColor }  # Use textbox default color (Lime) for Info messages
         }
 
         $script:outputTextBox.SelectionStart = $script:outputTextBox.TextLength
