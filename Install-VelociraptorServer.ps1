@@ -624,7 +624,7 @@ function Show-MainForm {
     $headerLabel.ForeColor = [System.Drawing.Color]::DarkBlue
     $form.Controls.Add($headerLabel)
 
-    $yPos = 60
+    [int]$yPos = 60
 
     # Installation Path
     $installPathLabel = New-Object System.Windows.Forms.Label
@@ -634,14 +634,14 @@ function Show-MainForm {
     $form.Controls.Add($installPathLabel)
 
     $installPathTextBox = New-Object System.Windows.Forms.TextBox
-    $installPathTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $installPathTextBox.Size = New-Object System.Drawing.Size(520, 20)
+    $installPathTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $installPathTextBox.Size = New-Object System.Drawing.Size -ArgumentList 520, 20
     $installPathTextBox.Text = "C:\Program Files\Velociraptor Server"
     $form.Controls.Add($installPathTextBox)
 
     $installPathBrowseButton = New-Object System.Windows.Forms.Button
-    $installPathBrowseButton.Location = New-Object System.Drawing.Point(700, $yPos - 4)
-    $installPathBrowseButton.Size = New-Object System.Drawing.Size(70, 24)
+    $installPathBrowseButton.Location = New-Object System.Drawing.Point -ArgumentList 700, ($yPos - 4)
+    $installPathBrowseButton.Size = New-Object System.Drawing.Size -ArgumentList 70, 24
     $installPathBrowseButton.Text = "Browse..."
     $installPathBrowseButton.Add_Click({
         $path = Get-FolderPath -Description "Select Installation Directory"
@@ -659,13 +659,13 @@ function Show-MainForm {
     $form.Controls.Add($exeLabel)
 
     $exeTextBox = New-Object System.Windows.Forms.TextBox
-    $exeTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $exeTextBox.Size = New-Object System.Drawing.Size(520, 20)
+    $exeTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $exeTextBox.Size = New-Object System.Drawing.Size -ArgumentList 520, 20
     $form.Controls.Add($exeTextBox)
 
     $exeBrowseButton = New-Object System.Windows.Forms.Button
-    $exeBrowseButton.Location = New-Object System.Drawing.Point(700, $yPos - 4)
-    $exeBrowseButton.Size = New-Object System.Drawing.Size(70, 24)
+    $exeBrowseButton.Location = New-Object System.Drawing.Point -ArgumentList 700, ($yPos - 4)
+    $exeBrowseButton.Size = New-Object System.Drawing.Size -ArgumentList 70, 24
     $exeBrowseButton.Text = "Browse..."
     $exeBrowseButton.Add_Click({
         $path = Get-FilePath
@@ -683,8 +683,8 @@ function Show-MainForm {
     $form.Controls.Add($hostnameLabel)
 
     $hostnameTextBox = New-Object System.Windows.Forms.TextBox
-    $hostnameTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $hostnameTextBox.Size = New-Object System.Drawing.Size(600, 20)
+    $hostnameTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $hostnameTextBox.Size = New-Object System.Drawing.Size -ArgumentList 600, 20
     $hostnameTextBox.Text = $env:COMPUTERNAME
     $form.Controls.Add($hostnameTextBox)
 
@@ -698,8 +698,8 @@ function Show-MainForm {
     $form.Controls.Add($frontendPortLabel)
 
     $frontendPortTextBox = New-Object System.Windows.Forms.TextBox
-    $frontendPortTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $frontendPortTextBox.Size = New-Object System.Drawing.Size(100, 20)
+    $frontendPortTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $frontendPortTextBox.Size = New-Object System.Drawing.Size -ArgumentList 100, 20
     $frontendPortTextBox.Text = "8000"
     $form.Controls.Add($frontendPortTextBox)
 
@@ -711,8 +711,8 @@ function Show-MainForm {
     $form.Controls.Add($guiPortLabel)
 
     $guiPortTextBox = New-Object System.Windows.Forms.TextBox
-    $guiPortTextBox.Location = New-Object System.Drawing.Point(510, $yPos - 2)
-    $guiPortTextBox.Size = New-Object System.Drawing.Size(100, 20)
+    $guiPortTextBox.Location = New-Object System.Drawing.Point -ArgumentList 510, ($yPos - 2)
+    $guiPortTextBox.Size = New-Object System.Drawing.Size -ArgumentList 100, 20
     $guiPortTextBox.Text = "8889"
     $form.Controls.Add($guiPortTextBox)
 
@@ -726,14 +726,14 @@ function Show-MainForm {
     $form.Controls.Add($datastoreLabel)
 
     $datastoreTextBox = New-Object System.Windows.Forms.TextBox
-    $datastoreTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $datastoreTextBox.Size = New-Object System.Drawing.Size(520, 20)
+    $datastoreTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $datastoreTextBox.Size = New-Object System.Drawing.Size -ArgumentList 520, 20
     $datastoreTextBox.Text = "C:\VelociraptorData"
     $form.Controls.Add($datastoreTextBox)
 
     $datastoreBrowseButton = New-Object System.Windows.Forms.Button
-    $datastoreBrowseButton.Location = New-Object System.Drawing.Point(700, $yPos - 4)
-    $datastoreBrowseButton.Size = New-Object System.Drawing.Size(70, 24)
+    $datastoreBrowseButton.Location = New-Object System.Drawing.Point -ArgumentList 700, ($yPos - 4)
+    $datastoreBrowseButton.Size = New-Object System.Drawing.Size -ArgumentList 70, 24
     $datastoreBrowseButton.Text = "Browse..."
     $datastoreBrowseButton.Add_Click({
         $path = Get-FolderPath -Description "Select Datastore Directory"
@@ -751,8 +751,8 @@ function Show-MainForm {
     $form.Controls.Add($adminUserLabel)
 
     $adminUserTextBox = New-Object System.Windows.Forms.TextBox
-    $adminUserTextBox.Location = New-Object System.Drawing.Point(170, $yPos - 2)
-    $adminUserTextBox.Size = New-Object System.Drawing.Size(250, 20)
+    $adminUserTextBox.Location = New-Object System.Drawing.Point -ArgumentList 170, ($yPos - 2)
+    $adminUserTextBox.Size = New-Object System.Drawing.Size -ArgumentList 250, 20
     $adminUserTextBox.Text = "admin"
     $form.Controls.Add($adminUserTextBox)
 
@@ -764,8 +764,8 @@ function Show-MainForm {
     $form.Controls.Add($adminPassLabel)
 
     $adminPassTextBox = New-Object System.Windows.Forms.TextBox
-    $adminPassTextBox.Location = New-Object System.Drawing.Point(510, $yPos - 2)
-    $adminPassTextBox.Size = New-Object System.Drawing.Size(260, 20)
+    $adminPassTextBox.Location = New-Object System.Drawing.Point -ArgumentList 510, ($yPos - 2)
+    $adminPassTextBox.Size = New-Object System.Drawing.Size -ArgumentList 260, 20
     $adminPassTextBox.UseSystemPasswordChar = $true
     $form.Controls.Add($adminPassTextBox)
 
