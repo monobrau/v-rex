@@ -71,18 +71,26 @@ try {
         
         # Show any new output
         if (Test-Path $stdoutFile) {
-            $newLines = Get-Content $stdoutFile -ErrorAction SilentlyContinue | Select-Object -Skip ($script:lastStdoutLines)
-            if ($newLines) {
-                $newLines | ForEach-Object { Write-Host "  [STDOUT] $_" -ForegroundColor Gray }
-                $script:lastStdoutLines = (Get-Content $stdoutFile -ErrorAction SilentlyContinue).Count
+            $allLines = Get-Content $stdoutFile -ErrorAction SilentlyContinue
+            if ($allLines) {
+                $skipCount = if ($script:lastStdoutLines) { $script:lastStdoutLines } else { 0 }
+                if ($allLines.Count -gt $skipCount) {
+                    $newLines = $allLines | Select-Object -Skip $skipCount
+                    $newLines | ForEach-Object { Write-Host "  [STDOUT] $_" -ForegroundColor Gray }
+                    $script:lastStdoutLines = $allLines.Count
+                }
             }
         }
         
         if (Test-Path $stderrFile) {
-            $newLines = Get-Content $stderrFile -ErrorAction SilentlyContinue | Select-Object -Skip ($script:lastStderrLines)
-            if ($newLines) {
-                $newLines | ForEach-Object { Write-Host "  [STDERR] $_" -ForegroundColor Red }
-                $script:lastStderrLines = (Get-Content $stderrFile -ErrorAction SilentlyContinue).Count
+            $allLines = Get-Content $stderrFile -ErrorAction SilentlyContinue
+            if ($allLines) {
+                $skipCount = if ($script:lastStderrLines) { $script:lastStderrLines } else { 0 }
+                if ($allLines.Count -gt $skipCount) {
+                    $newLines = $allLines | Select-Object -Skip $skipCount
+                    $newLines | ForEach-Object { Write-Host "  [STDERR] $_" -ForegroundColor Red }
+                    $script:lastStderrLines = $allLines.Count
+                }
             }
         }
         
