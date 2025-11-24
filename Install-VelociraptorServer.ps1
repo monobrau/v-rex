@@ -383,57 +383,71 @@ function Install-VelociraptorService {
         $stdoutFile = "$env:TEMP\velo-service-install.txt"
         $stderrFile = "$env:TEMP\velo-service-install-error.txt"
         
-        $process = Start-Process -FilePath $ExecutablePath `
-            -ArgumentList $installArgs `
-            -WorkingDirectory $workingDir `
-            -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput $stdoutFile `
-            -RedirectStandardError $stderrFile
-
-        # Read output files
-        $stdout = Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue
-        $stderr = Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue
-
-        # Always log output for debugging
-        Write-Log "Service install exit code: $($process.ExitCode)" -Level Info
+        Write-Log "Arguments array: $($installArgs -join ' ')" -Level Info
         
-        if ($stdout) {
-            Write-Log "Service install stdout: $stdout" -Level Info
-        }
-        else {
-            Write-Log "No stdout captured" -Level Warning
-        }
-
-        if ($stderr) {
-            Write-Log "Service install stderr: $stderr" -Level Error
-        }
-        else {
-            Write-Log "No stderr captured" -Level Warning
-        }
-
-        if ($process.ExitCode -eq 0) {
-            Write-Log "Service installed successfully" -Level Success
-
-            # Configure service for auto-start and recovery
-            sc.exe config VelociraptorServer start= auto
-            sc.exe failure VelociraptorServer reset= 86400 actions= restart/60000/restart/60000/restart/60000
-
-            Write-Log "Service configured for automatic startup" -Level Success
-            return $true
-        }
-        else {
-            $errorMsg = "Service installation failed with exit code $($process.ExitCode)"
-            if ($stderr) {
-                $errorMsg += "`nError output: $stderr"
+        # Use call operator with splatting for better path handling
+        Push-Location $workingDir
+        try {
+            $output = & $ExecutablePath $installArgs 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            # Write output to files for consistency
+            $output | Out-File -FilePath $stdoutFile -Encoding UTF8
+            $output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | 
+                ForEach-Object { $_.ToString() } | Out-File -FilePath $stderrFile -Encoding UTF8
+            
+            # Read output files
+            $stdout = Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue
+            $stderr = Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue
+            
+            # Create a process-like object for compatibility
+            $process = [PSCustomObject]@{
+                ExitCode = $exitCode
+            }
+            
+            Write-Log "Service install exit code: $exitCode" -Level Info
+        
+            if ($stdout) {
+                Write-Log "Service install stdout: $stdout" -Level Info
             }
             else {
-                $errorMsg += "`n(No error output captured - check $stderrFile)"
+                Write-Log "No stdout captured" -Level Warning
             }
-            if ($stdout) {
-                $errorMsg += "`nStandard output: $stdout"
+
+            if ($stderr) {
+                Write-Log "Service install stderr: $stderr" -Level Error
             }
-            Write-Log "Full error details: $errorMsg" -Level Error
-            throw $errorMsg
+            else {
+                Write-Log "No stderr captured" -Level Warning
+            }
+
+            if ($process.ExitCode -eq 0) {
+                Write-Log "Service installed successfully" -Level Success
+
+                # Configure service for auto-start and recovery
+                sc.exe config VelociraptorServer start= auto
+                sc.exe failure VelociraptorServer reset= 86400 actions= restart/60000/restart/60000/restart/60000
+
+                Write-Log "Service configured for automatic startup" -Level Success
+                return $true
+            }
+            else {
+                $errorMsg = "Service installation failed with exit code $($process.ExitCode)"
+                if ($stderr) {
+                    $errorMsg += "`nError output: $stderr"
+                }
+                else {
+                    $errorMsg += "`n(No error output captured - check $stderrFile)"
+                }
+                if ($stdout) {
+                    $errorMsg += "`nStandard output: $stdout"
+                }
+                Write-Log "Full error details: $errorMsg" -Level Error
+                throw $errorMsg
+            }
+        }
+        finally {
+            Pop-Location
         }
     }
     catch {
