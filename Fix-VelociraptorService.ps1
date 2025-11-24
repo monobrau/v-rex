@@ -120,26 +120,77 @@ else {
 # Step 4: Verify config file bind address
 Write-Host ""
 Write-Host "Step 4: Verifying configuration file..." -ForegroundColor Yellow
+
+# Read config file as lines to preserve structure
+$configLines = Get-Content $configPath
 $configContent = Get-Content $configPath -Raw
 $needsConfigFix = $false
+$inGuiSection = $false
+$guiBindAddress = $null
 
-if ($configContent -match 'GUI:[\s\S]*?bind_address:\s*([^\s\r\n]+)') {
-    $guiBindAddress = $matches[1].Trim()
-    Write-Host "   GUI bind address: $guiBindAddress" -ForegroundColor Gray
+# Find GUI bind address by parsing line by line
+for ($i = 0; $i -lt $configLines.Count; $i++) {
+    $line = $configLines[$i]
     
-    if ($guiBindAddress -eq '127.0.0.1' -or $guiBindAddress -eq 'localhost') {
-        Write-Host "   WARNING: GUI is bound to localhost only!" -ForegroundColor Yellow
-        Write-Host "   Would you like to change it to 0.0.0.0 for remote access? (Y/N)" -ForegroundColor Yellow
-        $response = Read-Host
-        if ($response -eq 'Y' -or $response -eq 'y') {
-            Write-Host "   Updating GUI bind address to 0.0.0.0..." -ForegroundColor Yellow
-            $configContent = $configContent -replace '(GUI:[\s\S]*?bind_address:\s*)(127\.0\.0\.1|localhost)', '$10.0.0.0'
-            $configContent | Set-Content $configPath -NoNewline
-            Write-Host "   Configuration updated" -ForegroundColor Green
+    # Detect GUI section start
+    if ($line -match '^GUI:\s*$' -or $line -match '^GUI:') {
+        $inGuiSection = $true
+    }
+    # Detect next top-level section (starts at column 0)
+    elseif ($inGuiSection -and $line -match '^[A-Z][^:]*:\s*$' -and $line -notmatch '^\s') {
+        $inGuiSection = $false
+    }
+    
+    # Find bind_address in GUI section
+    if ($inGuiSection -and $line -match '^\s+bind_address:\s*(.+)$') {
+        $guiBindAddress = $matches[1].Trim()
+        Write-Host "   GUI bind address: $guiBindAddress" -ForegroundColor Gray
+        
+        if ($guiBindAddress -eq '127.0.0.1' -or $guiBindAddress -eq 'localhost') {
+            Write-Host "   WARNING: GUI is bound to localhost only!" -ForegroundColor Yellow
+            Write-Host "   Would you like to change it to 0.0.0.0 for remote access? (Y/N)" -ForegroundColor Yellow
+            $response = Read-Host
+            if ($response -eq 'Y' -or $response -eq 'y') {
+                Write-Host "   Updating GUI bind address to 0.0.0.0..." -ForegroundColor Yellow
+                # Update just this line, preserving indentation
+                $indent = $line -match '^(\s+)bind_address:' | Out-Null
+                $indent = if ($matches) { $matches[1] } else { "  " }
+                $configLines[$i] = "${indent}bind_address: 0.0.0.0"
+                $needsConfigFix = $true
+            }
+        }
+        elseif ($guiBindAddress -eq '0.0.0.0') {
+            Write-Host "   [OK] GUI bind address is correct (0.0.0.0)" -ForegroundColor Green
+        }
+        break
+    }
+}
+
+# Write updated config if needed
+if ($needsConfigFix) {
+    try {
+        # Backup original config
+        $backupPath = "$configPath.backup.$(Get-Date -Format 'yyyyMMddHHmmss')"
+        Copy-Item $configPath $backupPath -Force
+        Write-Host "   Backup created: $backupPath" -ForegroundColor Gray
+        
+        # Write updated config
+        $configLines | Set-Content $configPath -Encoding UTF8
+        Write-Host "   Configuration updated" -ForegroundColor Green
+        
+        # Validate YAML syntax by trying to read it
+        $testContent = Get-Content $configPath -Raw
+        if (-not $testContent) {
+            throw "Config file appears empty after update"
         }
     }
-    elseif ($guiBindAddress -eq '0.0.0.0') {
-        Write-Host "   [OK] GUI bind address is correct (0.0.0.0)" -ForegroundColor Green
+    catch {
+        Write-Host "   ERROR: Failed to update config file: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "   Restoring from backup..." -ForegroundColor Yellow
+        if (Test-Path $backupPath) {
+            Copy-Item $backupPath $configPath -Force
+        }
+        exit 1
     }
 }
 
