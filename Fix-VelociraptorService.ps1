@@ -194,45 +194,104 @@ if ($needsConfigFix) {
     }
 }
 
-# Step 5: Install service with correct path
+# Step 5: Fix windows_installer path in config (if present)
 Write-Host ""
-Write-Host "Step 5: Installing service with correct server executable..." -ForegroundColor Yellow
-Push-Location $ServerPath
+Write-Host "Step 5: Updating windows_installer path in config..." -ForegroundColor Yellow
+$configLines = Get-Content $configPath
+$configUpdated = $false
+$inWindowsInstaller = $false
+
+for ($i = 0; $i -lt $configLines.Count; $i++) {
+    $line = $configLines[$i]
+    
+    if ($line -match '^windows_installer:') {
+        $inWindowsInstaller = $true
+    }
+    elseif ($inWindowsInstaller -and $line -match '^[A-Z]') {
+        $inWindowsInstaller = $false
+    }
+    
+    if ($inWindowsInstaller -and $line -match '^\s+install_path:\s*(.+)$') {
+        $currentPath = $matches[1].Trim()
+        if ($currentPath -notlike "*Velociraptor Server*") {
+            Write-Host "   Updating install_path from client to server path..." -ForegroundColor Yellow
+            $indent = if ($line -match '^(\s+)install_path:') { $matches[1] } else { "    " }
+            $serverInstallPath = '$ProgramFiles\Velociraptor Server\velociraptor.exe'
+            $configLines[$i] = "${indent}install_path: $serverInstallPath"
+            $configUpdated = $true
+        }
+        else {
+            Write-Host "   install_path is already correct" -ForegroundColor Gray
+        }
+    }
+}
+
+if ($configUpdated) {
+    try {
+        $backupPath = "$configPath.backup.$(Get-Date -Format 'yyyyMMddHHmmss')"
+        Copy-Item $configPath $backupPath -Force
+        Write-Host "   Backup created: $backupPath" -ForegroundColor Gray
+        $configLines | Set-Content $configPath -Encoding UTF8
+        Write-Host "   Config updated successfully" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "   WARNING: Could not update config: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+# Step 6: Install service with correct path using sc.exe directly
+Write-Host ""
+Write-Host "Step 6: Installing service with correct server executable..." -ForegroundColor Yellow
+
+# Use sc.exe directly to ensure correct path, bypassing config's windows_installer settings
+$serviceName = "Velociraptor"
+$binPath = "`"$serverExe`" --config `"$configPath`" service run"
+
 try {
-    $installArgs = @("--config", $ConfigFile, "service", "install")
-    Write-Host "   Running: .\velociraptor.exe $($installArgs -join ' ')" -ForegroundColor Gray
+    Write-Host "   Creating service with sc.exe..." -ForegroundColor Gray
+    $createResult = sc.exe create $serviceName binPath= $binPath start= auto DisplayName= "Velociraptor" 2>&1
     
-    $output = & $serverExe $installArgs 2>&1
-    $exitCode = $LASTEXITCODE
-    
-    if ($exitCode -eq 0) {
-        Write-Host "   Service installed successfully" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "   Service created successfully" -ForegroundColor Green
+        
+        # Set service description
+        sc.exe description $serviceName "Velociraptor Server" | Out-Null
+        
+        # Configure failure actions
+        sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
     }
     else {
-        Write-Host "   ERROR: Service installation failed with exit code $exitCode" -ForegroundColor Red
-        Write-Host "   Output:" -ForegroundColor Yellow
-        $output | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
-        Pop-Location
-        exit 1
-    }
-    
-    if ($output) {
-        Write-Host "   Installation output:" -ForegroundColor Gray
-        $output | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
+        Write-Host "   ERROR: Service creation failed" -ForegroundColor Red
+        Write-Host "   Output: $createResult" -ForegroundColor Gray
+        
+        # Try Velociraptor's service install as fallback
+        Write-Host "   Trying Velociraptor's service install as fallback..." -ForegroundColor Yellow
+        Push-Location $ServerPath
+        try {
+            $installArgs = @("--config", $ConfigFile, "service", "install")
+            $output = & $serverExe $installArgs 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            if ($exitCode -ne 0) {
+                Write-Host "   ERROR: Fallback installation also failed" -ForegroundColor Red
+                Write-Host "   Output: $output" -ForegroundColor Gray
+                Pop-Location
+                exit 1
+            }
+        }
+        finally {
+            Pop-Location
+        }
     }
 }
 catch {
     Write-Host "   ERROR: Failed to install service: $($_.Exception.Message)" -ForegroundColor Red
-    Pop-Location
     exit 1
 }
-finally {
-    Pop-Location
-}
 
-# Step 6: Verify service configuration
+# Step 7: Verify service configuration
 Write-Host ""
-Write-Host "Step 6: Verifying service configuration..." -ForegroundColor Yellow
+Write-Host "Step 7: Verifying service configuration..." -ForegroundColor Yellow
 Start-Sleep -Seconds 2
 $serviceQuery = sc.exe qc Velociraptor 2>&1
 if ($LASTEXITCODE -eq 0) {
@@ -244,6 +303,8 @@ if ($LASTEXITCODE -eq 0) {
     }
     else {
         Write-Host "   WARNING: Service path still doesn't look correct" -ForegroundColor Yellow
+        Write-Host "   Actual path: $binaryPath" -ForegroundColor Gray
+        Write-Host "   Expected: *Velociraptor Server*" -ForegroundColor Gray
         Write-Host "   Please verify manually: sc.exe qc Velociraptor" -ForegroundColor Yellow
     }
 }
@@ -251,9 +312,9 @@ else {
     Write-Host "   WARNING: Could not verify service configuration" -ForegroundColor Yellow
 }
 
-# Step 7: Start the service
+# Step 8: Start the service
 Write-Host ""
-Write-Host "Step 7: Starting Velociraptor service..." -ForegroundColor Yellow
+Write-Host "Step 8: Starting Velociraptor service..." -ForegroundColor Yellow
 try {
     Start-Service -Name "Velociraptor" -ErrorAction Stop
     Write-Host "   Service started successfully" -ForegroundColor Green
@@ -261,13 +322,19 @@ try {
     # Wait a moment for the service to start
     Start-Sleep -Seconds 3
     
-    # Verify it's running
-    $service.Refresh()
-    if ($service.Status -eq 'Running') {
-        Write-Host "   [OK] Service is running" -ForegroundColor Green
+    # Get service object to verify status
+    $service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
+    if ($service) {
+        $service.Refresh()
+        if ($service.Status -eq 'Running') {
+            Write-Host "   [OK] Service is running" -ForegroundColor Green
+        }
+        else {
+            Write-Host "   WARNING: Service status is $($service.Status)" -ForegroundColor Yellow
+        }
     }
     else {
-        Write-Host "   WARNING: Service status is $($service.Status)" -ForegroundColor Yellow
+        Write-Host "   WARNING: Could not retrieve service status" -ForegroundColor Yellow
     }
 }
 catch {
@@ -275,9 +342,9 @@ catch {
     Write-Host "   You may need to start it manually: Start-Service -Name 'Velociraptor'" -ForegroundColor Yellow
 }
 
-# Step 8: Final verification
+# Step 9: Final verification
 Write-Host ""
-Write-Host "Step 8: Final verification..." -ForegroundColor Yellow
+Write-Host "Step 9: Final verification..." -ForegroundColor Yellow
 $process = Get-Process -Name "velociraptor" -ErrorAction SilentlyContinue
 if ($process) {
     Write-Host "   Process found: PID $($process.Id)" -ForegroundColor Green
