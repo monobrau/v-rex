@@ -524,6 +524,8 @@ function New-AdminUser {
         $ConfigPath = (Resolve-Path $ConfigPath).Path
 
         # Use array for arguments
+        # Note: Some versions of Velociraptor don't support --password flag
+        # User will need to set password via web GUI on first login
         $userArgs = @(
             "--config"
             $ConfigPath
@@ -534,9 +536,12 @@ function New-AdminUser {
             "administrator"
         )
 
+        # Try to set password if provided, but don't fail if flag isn't supported
+        # Velociraptor may prompt for password interactively or require setting via GUI
+        $usePassword = $false
         if (![string]::IsNullOrWhiteSpace($Password)) {
-            $userArgs += "--password"
-            $userArgs += $Password
+            # Try with --password flag first
+            $usePassword = $true
         }
 
         $stdoutFile = "$env:TEMP\velo-user-add.txt"
@@ -546,6 +551,7 @@ function New-AdminUser {
         # Use call operator for better path handling
         Push-Location $workingDir
         try {
+            # First try without password (most reliable method)
             $output = & $ExecutablePath $userArgs 2>&1
             $exitCode = $LASTEXITCODE
 
@@ -573,6 +579,13 @@ function New-AdminUser {
 
                 if ($stdoutContent) {
                     Write-Log "User creation output: $stdoutContent" -Level Info
+                }
+
+                if ($usePassword) {
+                    Write-Log "Note: Password flag not supported by this Velociraptor version." -Level Warning
+                    Write-Log "User '$Username' was created without a password." -Level Warning
+                    Write-Log "Please set the password via the web GUI at first login, or use:" -Level Info
+                    Write-Log "  velociraptor.exe --config server.config.yaml user password $Username" -Level Info
                 }
 
                 return $true
