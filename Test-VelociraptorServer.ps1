@@ -98,8 +98,48 @@ else {
 }
 Write-Host ""
 
-# 5. Check configuration file
-Write-Host "5. Checking configuration file..." -ForegroundColor Yellow
+# 5. Check service binary path configuration
+Write-Host "5. Checking service binary path configuration..." -ForegroundColor Yellow
+$serviceQuery = sc.exe qc Velociraptor 2>&1
+if ($LASTEXITCODE -eq 0) {
+    $binaryPath = ($serviceQuery | Select-String "BINARY_PATH_NAME\s*:\s*(.+)").Matches.Groups[1].Value.Trim()
+    if ($binaryPath) {
+        Write-Host "   Service Binary Path: $binaryPath" -ForegroundColor Gray
+        
+        # Check if it's pointing to server executable
+        $expectedServerPath = "C:\Program Files\Velociraptor Server\velociraptor.exe"
+        if ($binaryPath -like "*Velociraptor Server*") {
+            Write-Host "   [OK] Service is configured to use SERVER executable" -ForegroundColor Green
+            
+            # Extract config path from binary path if present
+            if ($binaryPath -match '--config\s+"?([^"]+)"?') {
+                $serviceConfigPath = $matches[1]
+                Write-Host "   Service Config Path: $serviceConfigPath" -ForegroundColor Green
+            }
+        }
+        elseif ($binaryPath -like "*Velociraptor\Velociraptor.exe*" -and $binaryPath -notlike "*Velociraptor Server*") {
+            Write-Host "   [X] CRITICAL: Service is configured to use CLIENT executable!" -ForegroundColor Red
+            Write-Host "   Expected: $expectedServerPath" -ForegroundColor Yellow
+            Write-Host "   Actual: $binaryPath" -ForegroundColor Red
+            Write-Host "   This service needs to be reconfigured to use the server executable." -ForegroundColor Red
+        }
+        else {
+            Write-Host "   [?] Unknown executable path - verify manually" -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "   WARNING: Could not parse service binary path" -ForegroundColor Yellow
+        Write-Host "   Raw output: $serviceQuery" -ForegroundColor Gray
+    }
+}
+else {
+    Write-Host "   ERROR: Could not query service configuration" -ForegroundColor Red
+    Write-Host "   Output: $serviceQuery" -ForegroundColor Gray
+}
+Write-Host ""
+
+# 6. Check configuration file
+Write-Host "6. Checking configuration file..." -ForegroundColor Yellow
 $configPath = "C:\Program Files\Velociraptor Server\server.config.yaml"
 if (Test-Path $configPath) {
     Write-Host "   Config file exists: $configPath" -ForegroundColor Green
@@ -113,6 +153,25 @@ if (Test-Path $configPath) {
     if ($configContent -match 'Frontend:[\s\S]*?bind_port:\s*(\d+)') {
         $frontendPort = $matches[1]
         Write-Host "   Frontend Port in config: $frontendPort" -ForegroundColor Green
+    }
+    
+    # Check GUI bind_address (critical for remote access)
+    if ($configContent -match 'GUI:[\s\S]*?bind_address:\s*([^\s\r\n]+)') {
+        $guiBindAddress = $matches[1].Trim()
+        Write-Host "   GUI Bind Address: $guiBindAddress" -ForegroundColor $(if ($guiBindAddress -eq '0.0.0.0') { 'Green' } else { 'Yellow' })
+        if ($guiBindAddress -eq '127.0.0.1' -or $guiBindAddress -eq 'localhost') {
+            Write-Host "   [X] WARNING: GUI is bound to localhost only!" -ForegroundColor Red
+            Write-Host "   Remote access will not work. Change to 0.0.0.0 for remote access." -ForegroundColor Yellow
+        }
+        elseif ($guiBindAddress -eq '0.0.0.0') {
+            Write-Host "   [OK] GUI is bound to all interfaces (remote access enabled)" -ForegroundColor Green
+        }
+    }
+    
+    # Check Frontend bind_address
+    if ($configContent -match 'Frontend:[\s\S]*?bind_address:\s*([^\s\r\n]+)') {
+        $frontendBindAddress = $matches[1].Trim()
+        Write-Host "   Frontend Bind Address: $frontendBindAddress" -ForegroundColor $(if ($frontendBindAddress -eq '0.0.0.0') { 'Green' } else { 'Yellow' })
     }
     
     # Check for SSL settings
@@ -129,8 +188,8 @@ else {
 }
 Write-Host ""
 
-# 6. Check service logs
-Write-Host "6. Checking service logs..." -ForegroundColor Yellow
+# 7. Check service logs
+Write-Host "7. Checking service logs..." -ForegroundColor Yellow
 $logPath = "C:\Program Files\Velociraptor Server\Logs"
 $logPathAlt = "C:\Program Files\Velociraptor Server"
 $logPaths = @($logPath, $logPathAlt)
@@ -173,8 +232,8 @@ if (!$foundLogs) {
 }
 Write-Host ""
 
-# 7. Check Windows Event Log
-Write-Host "7. Checking Windows Event Log..." -ForegroundColor Yellow
+# 8. Check Windows Event Log
+Write-Host "8. Checking Windows Event Log..." -ForegroundColor Yellow
 $events = Get-EventLog -LogName Application -Source "*Velociraptor*" -Newest 5 -ErrorAction SilentlyContinue
 if ($events) {
     Write-Host "   Recent Velociraptor events:" -ForegroundColor Green
@@ -188,8 +247,8 @@ else {
 }
 Write-Host ""
 
-# 8. Check if process is actually running
-Write-Host "8. Checking if Velociraptor process is running..." -ForegroundColor Yellow
+# 9. Check if process is actually running
+Write-Host "9. Checking if Velociraptor process is running..." -ForegroundColor Yellow
 $process = Get-Process -Name "velociraptor" -ErrorAction SilentlyContinue
 if ($process) {
     Write-Host "   Process found: PID $($process.Id)" -ForegroundColor Green
@@ -224,7 +283,7 @@ else {
 }
 Write-Host ""
 
-# 9. Summary and recommendations
+# 10. Summary and recommendations
 Write-Host "=== Summary and Recommendations ===" -ForegroundColor Cyan
 Write-Host ""
 
@@ -232,6 +291,24 @@ Write-Host ""
 $service.Refresh()
 if ($service -and $service.Status -eq 'Running') {
     Write-Host "[OK] Service is running" -ForegroundColor Green
+    
+    # Verify service binary path
+    $serviceQuery = sc.exe qc Velociraptor 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $binaryPath = ($serviceQuery | Select-String "BINARY_PATH_NAME\s*:\s*(.+)").Matches.Groups[1].Value.Trim()
+        if ($binaryPath -like "*Velociraptor Server*") {
+            Write-Host "[OK] Service binary path points to SERVER executable" -ForegroundColor Green
+        }
+        elseif ($binaryPath -like "*Velociraptor\Velociraptor.exe*" -and $binaryPath -notlike "*Velociraptor Server*") {
+            Write-Host "[X] Service binary path points to CLIENT executable (WRONG!)" -ForegroundColor Red
+            Write-Host "  -> Service needs to be reconfigured. Run on server:" -ForegroundColor Yellow
+            Write-Host "     Stop-Service -Name 'Velociraptor'" -ForegroundColor Gray
+            Write-Host "     sc.exe delete Velociraptor" -ForegroundColor Gray
+            Write-Host "     cd 'C:\Program Files\Velociraptor Server'" -ForegroundColor Gray
+            Write-Host "     .\velociraptor.exe --config server.config.yaml service install" -ForegroundColor Gray
+            Write-Host ""
+        }
+    }
     
     if ($process) {
         $processDir = Split-Path $process.Path -Parent
@@ -253,6 +330,24 @@ else {
     Write-Host "[X] Service is NOT running" -ForegroundColor Red
     Write-Host "  -> Try: Start-Service -Name 'Velociraptor'" -ForegroundColor Yellow
     Write-Host ""
+}
+
+# Verify GUI bind address
+$configPath = "C:\Program Files\Velociraptor Server\server.config.yaml"
+if (Test-Path $configPath) {
+    $configContent = Get-Content $configPath -Raw
+    if ($configContent -match 'GUI:[\s\S]*?bind_address:\s*([^\s\r\n]+)') {
+        $guiBindAddress = $matches[1].Trim()
+        if ($guiBindAddress -eq '0.0.0.0') {
+            Write-Host "[OK] GUI bind address is 0.0.0.0 (remote access enabled)" -ForegroundColor Green
+        }
+        elseif ($guiBindAddress -eq '127.0.0.1' -or $guiBindAddress -eq 'localhost') {
+            Write-Host "[X] GUI bind address is $guiBindAddress (localhost only - remote access disabled)" -ForegroundColor Red
+            Write-Host "  -> Edit config file and change GUI.bind_address to 0.0.0.0" -ForegroundColor Yellow
+            Write-Host "  -> Then restart service: Restart-Service -Name 'Velociraptor'" -ForegroundColor Yellow
+            Write-Host ""
+        }
+    }
 }
 
 $guiPort = 8889
