@@ -288,7 +288,10 @@ Write-Host "=== Summary and Recommendations ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Check service status (refresh to get current state)
-$service.Refresh()
+$service = Get-Service -Name "Velociraptor" -ErrorAction SilentlyContinue
+if ($service) {
+    $service.Refresh()
+}
 if ($service -and $service.Status -eq 'Running') {
     Write-Host "[OK] Service is running" -ForegroundColor Green
     
