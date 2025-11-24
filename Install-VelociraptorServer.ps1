@@ -327,10 +327,7 @@ function Install-VelociraptorService {
             }
 
             # Remove service using velociraptor command
-            $removeArgs = @(
-                "--config", $ConfigPath,
-                "service", "remove"
-            )
+            $removeArgs = "--config `"$ConfigPath`" service remove"
             
             $removeProcess = Start-Process -FilePath $ExecutablePath `
                 -ArgumentList $removeArgs `
@@ -365,10 +362,8 @@ function Install-VelociraptorService {
         Write-Log "Executable: $ExecutablePath" -Level Info
         Write-Log "Config: $ConfigPath" -Level Info
         
-        $installArgs = @(
-            "--config", $ConfigPath,
-            "service", "install"
-        )
+        # Build argument string with proper quoting for paths with spaces
+        $installArgs = "--config `"$ConfigPath`" service install"
 
         $stdoutFile = "$env:TEMP\velo-service-install.txt"
         $stderrFile = "$env:TEMP\velo-service-install-error.txt"
@@ -430,16 +425,11 @@ function New-AdminUser {
     try {
         Write-Log "Creating initial admin user..." -Level Info
 
-        $userArgs = @(
-            "--config", $ConfigPath,
-            "user", "add",
-            $Username,
-            "--role", "administrator"
-        )
+        # Build argument string with proper quoting for paths with spaces
+        $userArgs = "--config `"$ConfigPath`" user add `"$Username`" --role administrator"
 
         if (![string]::IsNullOrWhiteSpace($Password)) {
-            $userArgs += "--password"
-            $userArgs += $Password
+            $userArgs += " --password `"$Password`""
         }
 
         $process = Start-Process -FilePath $ExecutablePath `
