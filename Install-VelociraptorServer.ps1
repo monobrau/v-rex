@@ -367,6 +367,11 @@ function Install-VelociraptorService {
         Write-Log "Executable: $ExecutablePath" -Level Info
         Write-Log "Config: $ConfigPath" -Level Info
         
+        # Set working directory to config file location
+        $workingDir = Split-Path $ConfigPath -Parent
+        Write-Log "Working directory: $workingDir" -Level Info
+        Write-Log "Command: $ExecutablePath --config `"$ConfigPath`" service install" -Level Info
+        
         # Use array for arguments - PowerShell will handle quoting automatically
         $installArgs = @(
             "--config"
@@ -377,9 +382,6 @@ function Install-VelociraptorService {
 
         $stdoutFile = "$env:TEMP\velo-service-install.txt"
         $stderrFile = "$env:TEMP\velo-service-install-error.txt"
-
-        # Set working directory to config file location
-        $workingDir = Split-Path $ConfigPath -Parent
         
         $process = Start-Process -FilePath $ExecutablePath `
             -ArgumentList $installArgs `
@@ -392,12 +394,21 @@ function Install-VelociraptorService {
         $stdout = Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue
         $stderr = Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue
 
+        # Always log output for debugging
+        Write-Log "Service install exit code: $($process.ExitCode)" -Level Info
+        
         if ($stdout) {
-            Write-Log "Service install output: $stdout" -Level Info
+            Write-Log "Service install stdout: $stdout" -Level Info
+        }
+        else {
+            Write-Log "No stdout captured" -Level Warning
         }
 
         if ($stderr) {
-            Write-Log "Service install error output: $stderr" -Level Error
+            Write-Log "Service install stderr: $stderr" -Level Error
+        }
+        else {
+            Write-Log "No stderr captured" -Level Warning
         }
 
         if ($process.ExitCode -eq 0) {
@@ -415,9 +426,13 @@ function Install-VelociraptorService {
             if ($stderr) {
                 $errorMsg += "`nError output: $stderr"
             }
+            else {
+                $errorMsg += "`n(No error output captured - check $stderrFile)"
+            }
             if ($stdout) {
                 $errorMsg += "`nStandard output: $stdout"
             }
+            Write-Log "Full error details: $errorMsg" -Level Error
             throw $errorMsg
         }
     }
