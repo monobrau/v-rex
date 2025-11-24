@@ -98,8 +98,17 @@ if ($LASTEXITCODE -eq 0) {
     $binPath = ($serviceQuery | Select-String "BINARY_PATH_NAME\s*:\s*(.+)").Matches.Groups[1].Value.Trim()
     Write-Host "Current binPath: $binPath" -ForegroundColor Gray
     
-    if ($binPath -notmatch '--config') {
+        if ($binPath -notmatch '--config') {
         Write-Host "Updating binPath to include --config..." -ForegroundColor Yellow
+        
+        # Stop service first if it's running
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') {
+            Write-Host "Stopping service to apply registry changes..." -ForegroundColor Gray
+            Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+            Get-Process -Name "velociraptor" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        }
         
         $correctBinPath = "`"$serverExe`" --config `"$configPath`" service run"
         
