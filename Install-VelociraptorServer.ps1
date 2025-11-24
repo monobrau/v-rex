@@ -327,7 +327,12 @@ function Install-VelociraptorService {
             }
 
             # Remove service using velociraptor command
-            $removeArgs = "--config `"$ConfigPath`" service remove"
+            $removeArgs = @(
+                "--config"
+                $ConfigPath
+                "service"
+                "remove"
+            )
             
             $removeProcess = Start-Process -FilePath $ExecutablePath `
                 -ArgumentList $removeArgs `
@@ -362,8 +367,13 @@ function Install-VelociraptorService {
         Write-Log "Executable: $ExecutablePath" -Level Info
         Write-Log "Config: $ConfigPath" -Level Info
         
-        # Build argument string with proper quoting for paths with spaces
-        $installArgs = "--config `"$ConfigPath`" service install"
+        # Use array for arguments - PowerShell will handle quoting automatically
+        $installArgs = @(
+            "--config"
+            $ConfigPath
+            "service"
+            "install"
+        )
 
         $stdoutFile = "$env:TEMP\velo-service-install.txt"
         $stderrFile = "$env:TEMP\velo-service-install-error.txt"
@@ -384,6 +394,10 @@ function Install-VelociraptorService {
 
         if ($stdout) {
             Write-Log "Service install output: $stdout" -Level Info
+        }
+
+        if ($stderr) {
+            Write-Log "Service install error output: $stderr" -Level Error
         }
 
         if ($process.ExitCode -eq 0) {
@@ -425,11 +439,20 @@ function New-AdminUser {
     try {
         Write-Log "Creating initial admin user..." -Level Info
 
-        # Build argument string with proper quoting for paths with spaces
-        $userArgs = "--config `"$ConfigPath`" user add `"$Username`" --role administrator"
+        # Use array for arguments - PowerShell will handle quoting automatically
+        $userArgs = @(
+            "--config"
+            $ConfigPath
+            "user"
+            "add"
+            $Username
+            "--role"
+            "administrator"
+        )
 
         if (![string]::IsNullOrWhiteSpace($Password)) {
-            $userArgs += " --password `"$Password`""
+            $userArgs += "--password"
+            $userArgs += $Password
         }
 
         $process = Start-Process -FilePath $ExecutablePath `
